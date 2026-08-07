@@ -187,9 +187,20 @@ declare -a SUGGESTIONS_CRITICAL=()
 declare -a SUGGESTIONS_WARNING=()
 declare -a SUGGESTIONS_INFO=()
 
-# Safe command execution (returns empty on failure)
-safe_exec() {
-    eval "$@" 2>/dev/null || echo ""
+# Reduce a component version string to its bare semver so that differently
+# formatted-but-equivalent versions compare equal:
+#   v1.11.4-eksbuild.14        -> 1.11.4
+#   v1.32.6-minimal-eksbuild.12 -> 1.32.6
+#   v1.40.0                     -> 1.40.0   (image tags often omit -eksbuild.N)
+normalize_component_version() {
+    local v="${1#v}"
+    echo "${v%%-*}"
+}
+
+# Major.minor of a bare semver: 1.11.4 -> 1.11
+major_minor() {
+    local v="$1"
+    echo "$v" | cut -d'.' -f1,2
 }
 
 # Convert date to epoch for comparison (cross-platform)
@@ -406,17 +417,38 @@ discover_cluster_info() {
     local private_access
     private_access=$(echo "$cluster_json" | jq -r '.cluster.resourcesVpcConfig.endpointPrivateAccess')
 
+    # Which source IPs may reach the public endpoint. Without this, a cluster
+    # with public+private access enabled looked fine even when its API server
+    # was reachable from the entire internet.
+    local public_cidrs
+    public_cidrs=$(echo "$cluster_json" | jq -r 'if (.cluster.resourcesVpcConfig.publicAccessCidrs | type) == "array" and (.cluster.resourcesVpcConfig.publicAccessCidrs | length) > 0 then .cluster.resourcesVpcConfig.publicAccessCidrs | join(", ") else "N/A" end' 2>/dev/null || echo "N/A")
+
     output "  VPC ID            : $vpc_id"
     output "  Subnets           : $subnet_ids"
     output "  Security Groups   : $sg_ids"
     output "  Cluster SG        : $cluster_sg"
     output "  Public Access     : $public_access"
     output "  Private Access    : $private_access"
+    if [[ "$public_access" == "true" ]]; then
+        if echo "$public_cidrs" | grep -q '0\.0\.0\.0/0'; then
+            output "  Public Access CIDR: ${RED}$public_cidrs (open to the entire internet)${NC}"
+        else
+            output "  Public Access CIDR: $public_cidrs"
+        fi
+    fi
+
+    csv_row "\"CLUSTER\"" "\"endpoint_access\"" "\"\"" "\"$CLUSTER_NAME\"" "\"public=$public_access, private=$private_access\"" "\"\"" "\"\"" "\"public_cidrs=$public_cidrs\""
 
     if [[ "$public_access" == "true" && "$private_access" == "false" ]]; then
         add_suggestion "WARNING" \
             "Cluster endpoint is publicly accessible without private access" \
             "Consider enabling private endpoint access for better security."
+    fi
+
+    if [[ "$public_access" == "true" ]] && echo "$public_cidrs" | grep -q '0\.0\.0\.0/0'; then
+        add_suggestion "CRITICAL" \
+            "Kubernetes API server is reachable from any IP address (publicAccessCidrs = 0.0.0.0/0)" \
+            "Anyone on the internet can reach the control plane endpoint; only authentication stands between them and the API. Restrict to office/VPN ranges via: aws eks update-cluster-config --name $CLUSTER_NAME --region $REGION --resources-vpc-config publicAccessCidrs=<your-cidrs>  -- or disable public access entirely if private access is enabled."
     fi
 
     # Logging
@@ -515,6 +547,10 @@ discover_node_groups() {
                     --region "$REGION" \
                     --query 'LaunchTemplateVersions[0].LaunchTemplateData.ImageId' \
                     --output text 2>/dev/null || echo "N/A")
+                # `--output text` prints the literal string "None" for a null
+                # result (e.g. a launch template that does not pin an AMI),
+                # which then leaked into the report as "AMI ID: None".
+                [[ -z "$ng_ami_id" || "$ng_ami_id" == "None" ]] && ng_ami_id="N/A"
             fi
 
             # Determine AL2 migration status
@@ -679,14 +715,11 @@ discover_node_groups() {
         printf "  %-40s %-8s %-18s %-15s %-20s %s\n" "NODE NAME" "STATUS" "KUBELET VERSION" "INSTANCE TYPE" "OS IMAGE" "ARCH" | tee -a "$REPORT_FILE"
         printf "  %-40s %-8s %-18s %-15s %-20s %s\n" "────────────────────────────────────────" "────────" "──────────────────" "───────────────" "────────────────────" "──────" | tee -a "$REPORT_FILE"
 
-        echo "$nodes_json" | jq -r '.items[] | [
-            .metadata.name,
-            (.status.conditions[] | select(.type=="Ready") | .status),
-            .status.nodeInfo.kubeletVersion,
-            (.metadata.labels["node.kubernetes.io/instance-type"] // "N/A"),
-            .status.nodeInfo.osImage,
-            .status.nodeInfo.architecture
-        ] | @tsv' 2>/dev/null | while IFS=$'\t' read -r name ready kubelet itype os arch; do
+        # NOTE: fed via process substitution (not a pipe) so that add_suggestion
+        # runs in this shell - a pipeline would put the loop in a subshell and
+        # discard every suggestion and counter it produces.
+        local al2_nodes=() skewed_nodes=()
+        while IFS=$'\t' read -r name ready kubelet itype os arch; do
             local status_display status_plain
             if [[ "$ready" == "True" ]]; then
                 status_display="${GREEN}Ready${NC}"
@@ -705,30 +738,58 @@ discover_node_groups() {
             # CSV: Node data
             csv_row "\"NODE\"" "\"node\"" "\"\"" "\"$name\"" "\"$kubelet\"" "\"\"" "\"$status_plain\"" "\"instance=$itype, os=$os, arch=$arch\""
 
-            # Check if OS image indicates AL2 (not AL2023)
+            # Check if OS image indicates AL2 (not AL2023) - collected, reported once below
             if echo "$os" | grep -qi "Amazon Linux 2" && ! echo "$os" | grep -qi "2023"; then
-                add_suggestion "CRITICAL" \
-                    "Node '$name' is running Amazon Linux 2 (OS: $os) - UNSUPPORTED" \
-                    "AL2 EKS AMI support ended Nov 2025. AL2 OS EOL: Jun 30, 2026. Migrate to AL2023."
+                al2_nodes+=("$name")
             fi
 
-            # Check kubelet version skew
+            # Check kubelet version skew - collected, reported once below
             local kubelet_minor
             kubelet_minor=$(echo "$kubelet" | grep -oE '1\.[0-9]+' | head -1)
             if [[ -n "$kubelet_minor" && "$kubelet_minor" != "$CLUSTER_K8S_VERSION" ]]; then
-                add_suggestion "WARNING" \
-                    "Node $name kubelet version ($kubelet) differs from control plane ($CLUSTER_K8S_VERSION)" \
-                    "Update the node to match the control plane version."
+                skewed_nodes+=("$name ($kubelet)")
             fi
-        done
+        done < <(echo "$nodes_json" | jq -r '.items[] | [
+            .metadata.name,
+            (.status.conditions[] | select(.type=="Ready") | .status),
+            .status.nodeInfo.kubeletVersion,
+            (.metadata.labels["node.kubernetes.io/instance-type"] // "N/A"),
+            .status.nodeInfo.osImage,
+            .status.nodeInfo.architecture
+        ] | @tsv' 2>/dev/null)
+
+        # Aggregate node-level findings into one suggestion each instead of one per node
+        if [[ ${#al2_nodes[@]} -gt 0 ]]; then
+            add_suggestion "CRITICAL" \
+                "${#al2_nodes[@]} of $node_count node(s) are running Amazon Linux 2 - UNSUPPORTED" \
+                "AL2 EKS AMI support ended Nov 26, 2025. AL2 OS EOL: Jun 30, 2026. Migrate to AL2023. Nodes: ${al2_nodes[*]}"
+        fi
+        if [[ ${#skewed_nodes[@]} -gt 0 ]]; then
+            add_suggestion "WARNING" \
+                "${#skewed_nodes[@]} node(s) have a kubelet version differing from the control plane ($CLUSTER_K8S_VERSION)" \
+                "Update these nodes to match the control plane. Nodes: ${skewed_nodes[*]}"
+        fi
     fi
 
-    # Node resource summary
+    # Node resource summary. HAS_METRICS_SERVER is consumed later by the HPA
+    # check - an HPA without metrics-server silently never scales, and the two
+    # facts were previously reported in separate sections with no link drawn.
     sub_header "Node Resource Summary"
     output ""
-    kubectl top nodes 2>/dev/null | while IFS= read -r line; do
-        output "  $line"
-    done || output "  ${YELLOW}(metrics-server not available - kubectl top nodes failed)${NC}"
+    local top_output
+    top_output=$(kubectl top nodes 2>/dev/null || echo "")
+    if [[ -n "$top_output" ]]; then
+        HAS_METRICS_SERVER=true
+        while IFS= read -r line; do
+            output "  $line"
+        done < <(echo "$top_output")
+    else
+        HAS_METRICS_SERVER=false
+        output "  ${YELLOW}(metrics-server not available - kubectl top nodes failed)${NC}"
+        add_suggestion "WARNING" \
+            "metrics-server is not installed or not responding" \
+            "Without it 'kubectl top' returns nothing, HorizontalPodAutoscalers cannot scale, and you have no CPU/memory data to size nodes with - which you need before planning an AL2023 migration. Install: kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml"
+    fi
 
     # AL2 → AL2023 Migration Summary
     sub_header "AL2 → AL2023 Migration Reference"
@@ -826,35 +887,98 @@ discover_addons() {
             "Consider using managed add-ons (vpc-cni, coredns, kube-proxy) for easier lifecycle management."
     fi
 
-    # Self-managed core components
-    sub_header "Core Component Versions (from cluster)"
+    # ── Core components: running version vs AWS-recommended version ──
+    #
+    # The previous version of this section only printed the image string, so a
+    # component running five minor versions behind the control plane looked
+    # identical to an up-to-date one. Each component below is checked against
+    # the version AWS recommends for this cluster's Kubernetes version, and
+    # flagged when it is self-managed (i.e. not in the managed add-on list),
+    # since self-managed components never surface in the add-on update check.
+    sub_header "Core Component Versions (running vs recommended)"
     output ""
+    printf "  %-14s %-13s %-28s %-24s %s\n" "COMPONENT" "MANAGED BY" "RUNNING" "RECOMMENDED" "STATUS" | tee -a "$REPORT_FILE"
+    printf "  %-14s %-13s %-28s %-24s %s\n" "──────────────" "─────────────" "────────────────────────────" "────────────────────────" "──────────" | tee -a "$REPORT_FILE"
 
-    # CoreDNS
-    local coredns_version
-    coredns_version=$(kubectl get deploy coredns -n kube-system -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "N/A")
-    output "  CoreDNS Image   : $coredns_version"
-    csv_row "\"ADDON\"" "\"core_component\"" "\"kube-system\"" "\"coredns\"" "\"$coredns_version\"" "\"\"" "\"\"" "\"\""
+    # addon_name : kubectl resource : display label
+    local core_components=(
+        "coredns:deploy/coredns:CoreDNS"
+        "kube-proxy:ds/kube-proxy:kube-proxy"
+        "vpc-cni:ds/aws-node:VPC CNI"
+        "aws-ebs-csi-driver:deploy/ebs-csi-controller:EBS CSI"
+        "aws-efs-csi-driver:deploy/efs-csi-controller:EFS CSI"
+    )
 
-    # kube-proxy
-    local kube_proxy_version
-    kube_proxy_version=$(kubectl get ds kube-proxy -n kube-system -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "N/A")
-    output "  kube-proxy Image: $kube_proxy_version"
-    csv_row "\"ADDON\"" "\"core_component\"" "\"kube-system\"" "\"kube-proxy\"" "\"$kube_proxy_version\"" "\"\"" "\"\"" "\"\""
+    local cc_entry cc_addon cc_res cc_label
+    for cc_entry in "${core_components[@]}"; do
+        IFS=':' read -r cc_addon cc_res cc_label <<< "$cc_entry"
 
-    # VPC CNI
-    local vpc_cni_version
-    vpc_cni_version=$(kubectl get ds aws-node -n kube-system -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "N/A")
-    output "  VPC CNI Image   : $vpc_cni_version"
-    csv_row "\"ADDON\"" "\"core_component\"" "\"kube-system\"" "\"vpc-cni\"" "\"$vpc_cni_version\"" "\"\"" "\"\"" "\"\""
+        local cc_image
+        cc_image=$(kubectl get "$cc_res" -n kube-system -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "")
+        # Not installed at all - skip silently (EFS CSI is optional)
+        [[ -z "$cc_image" ]] && continue
 
-    # EBS CSI Driver
-    local ebs_csi_version
-    ebs_csi_version=$(kubectl get deploy ebs-csi-controller -n kube-system -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "N/A")
-    if [[ "$ebs_csi_version" != "N/A" ]]; then
-        output "  EBS CSI Image   : $ebs_csi_version"
-        csv_row "\"ADDON\"" "\"core_component\"" "\"kube-system\"" "\"ebs-csi\"" "\"$ebs_csi_version\"" "\"\"" "\"\"" "\"\""
-    fi
+        # Tag is everything after the last ':' (ECR registries carry no port)
+        local cc_running="${cc_image##*:}"
+        [[ "$cc_running" == "$cc_image" ]] && cc_running="untagged"
+
+        # Is it a managed add-on, or self-managed?
+        local cc_managed="self-managed"
+        if echo "$addon_list" | grep -qx "$cc_addon"; then
+            cc_managed="EKS add-on"
+        fi
+
+        local cc_recommended
+        cc_recommended=$(aws eks describe-addon-versions \
+            --addon-name "$cc_addon" \
+            --kubernetes-version "$CLUSTER_K8S_VERSION" \
+            --region "$REGION" \
+            --query 'addons[0].addonVersions[0].addonVersion' \
+            --output text 2>/dev/null || echo "N/A")
+
+        local cc_status cc_status_plain
+        if [[ "$cc_recommended" == "N/A" || "$cc_recommended" == "None" || "$cc_running" == "untagged" ]]; then
+            cc_status="${YELLOW}unknown${NC}"
+            cc_status_plain="UNKNOWN"
+        else
+            local run_base rec_base run_mm rec_mm
+            run_base=$(normalize_component_version "$cc_running")
+            rec_base=$(normalize_component_version "$cc_recommended")
+            run_mm=$(major_minor "$run_base")
+            rec_mm=$(major_minor "$rec_base")
+
+            if [[ "$run_base" == "$rec_base" ]]; then
+                cc_status="${GREEN}current${NC}"
+                cc_status_plain="CURRENT"
+            elif [[ "$run_mm" != "$rec_mm" ]]; then
+                # Differs by more than a patch release - this is the case that
+                # matters, and the one the old code could not see at all.
+                cc_status="${RED}OUTDATED${NC}"
+                cc_status_plain="OUTDATED"
+                add_suggestion "CRITICAL" \
+                    "$cc_label is significantly out of date: $cc_running (recommended for K8s $CLUSTER_K8S_VERSION: $cc_recommended)" \
+                    "Running as $cc_managed. A component several minor versions behind the control plane is unsupported and is a likely blocker for upgrading past K8s $CLUSTER_K8S_VERSION. Upgrade before any cluster version bump."
+            else
+                cc_status="${YELLOW}patch behind${NC}"
+                cc_status_plain="PATCH_BEHIND"
+                add_suggestion "WARNING" \
+                    "$cc_label is behind on patch releases: $cc_running → $cc_recommended" \
+                    "Running as $cc_managed. Update to pick up security and bug fixes."
+            fi
+        fi
+
+        # Self-managed core components have no lifecycle management at all
+        if [[ "$cc_managed" == "self-managed" ]]; then
+            add_suggestion "WARNING" \
+                "$cc_label is self-managed, not an EKS managed add-on" \
+                "It will never appear in add-on update checks and must be upgraded by hand. Convert with: aws eks create-addon --cluster-name $CLUSTER_NAME --addon-name $cc_addon --region $REGION --resolve-conflicts OVERWRITE"
+        fi
+
+        printf "  %-14s %-13s %-28s %-24s %b\n" "$cc_label" "$cc_managed" "$cc_running" "$cc_recommended" "$cc_status"
+        printf "  %-14s %-13s %-28s %-24s %s\n" "$cc_label" "$cc_managed" "$cc_running" "$cc_recommended" "$cc_status_plain" >> "$REPORT_FILE"
+
+        csv_row "\"ADDON\"" "\"core_component\"" "\"kube-system\"" "\"$cc_label\"" "\"$cc_running\"" "\"$cc_recommended\"" "\"$cc_status_plain\"" "\"managed_by=$cc_managed, image=$cc_image\""
+    done
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -894,44 +1018,63 @@ discover_applications() {
         printf "  %-25s %-40s %-8s %-8s %s\n" "NAMESPACE" "NAME" "READY" "AVAIL" "IMAGES" | tee -a "$REPORT_FILE"
         printf "  %-25s %-40s %-8s %-8s %s\n" "─────────────────────────" "────────────────────────────────────────" "────────" "────────" "──────────────────────" | tee -a "$REPORT_FILE"
 
-        echo "$deploy_json" | jq -r '.items[] | [
-            .metadata.namespace,
-            .metadata.name,
-            ((.status.readyReplicas // 0) | tostring) + "/" + ((.spec.replicas // 0) | tostring),
-            (.status.availableReplicas // 0 | tostring),
-            ([.spec.template.spec.containers[]?.image] | join(", "))
-        ] | @tsv' 2>/dev/null | sort | while IFS=$'\t' read -r ns name ready avail images; do
+        # NOTE: process substitution, not a pipe - see the nodes loop above.
+        local single_replica=()
+        while IFS=$'\t' read -r ns name ready avail images; do
             printf "  %-25s %-40s %-8s %-8s %s\n" "$ns" "$name" "$ready" "$avail" "$images" | tee -a "$REPORT_FILE"
 
             # CSV: Deployment data
             csv_row "\"DEPLOYMENT\"" "\"deployment\"" "\"$ns\"" "\"$name\"" "\"$images\"" "\"\"" "\"ready=$ready\"" "\"available=$avail\""
 
-            # Check single replica
-            local desired
-            desired=$(echo "$ready" | cut -d'/' -f2)
-            if [[ "$desired" == "1" && "$ns" != "kube-system" ]]; then
-                add_suggestion "INFO" \
-                    "Deployment '$name' in namespace '$ns' has only 1 replica" \
-                    "Consider running at least 2 replicas for high availability."
-            fi
-
-            # Check for :latest tag
-            if echo "$images" | grep -qE ':latest(,|$)' || echo "$images" | grep -qvE ':[a-zA-Z0-9]'; then
-                add_suggestion "WARNING" \
-                    "Deployment '$name' in '$ns' uses ':latest' or untagged image" \
-                    "Images: $images. Use specific version tags for reproducibility."
-            fi
-
-            # Check if not all replicas ready
             local ready_count desired_count
             ready_count=$(echo "$ready" | cut -d'/' -f1)
             desired_count=$(echo "$ready" | cut -d'/' -f2)
+
+            # Check single replica - collected, reported once below
+            if [[ "$desired_count" == "1" && "$ns" != "kube-system" ]]; then
+                single_replica+=("$ns/$name")
+            fi
+
+            # Check for :latest or untagged image. Check each image separately:
+            # a single grep over the joined list cannot tell which image is bad.
+            local bad_images=""
+            local img
+            for img in ${images//,/ }; do
+                [[ -z "$img" ]] && continue
+                # Strip any digest, then look for a tag on the final path segment
+                local ref="${img%%@*}"
+                if [[ "$ref" == *:latest ]]; then
+                    bad_images+="${bad_images:+, }$img (:latest)"
+                elif [[ "${ref##*/}" != *:* ]]; then
+                    bad_images+="${bad_images:+, }$img (untagged)"
+                fi
+            done
+            if [[ -n "$bad_images" ]]; then
+                add_suggestion "WARNING" \
+                    "Deployment '$name' in '$ns' uses ':latest' or untagged image" \
+                    "Images: $bad_images. Use specific version tags for reproducibility."
+            fi
+
+            # Check if not all replicas ready
             if [[ "$ready_count" != "$desired_count" ]]; then
                 add_suggestion "WARNING" \
                     "Deployment '$name' in '$ns' has insufficient ready replicas ($ready)" \
                     "Investigate why not all replicas are ready."
             fi
-        done
+        done < <(echo "$deploy_json" | jq -r '.items[] | [
+            .metadata.namespace,
+            .metadata.name,
+            ((.status.readyReplicas // 0) | tostring) + "/" + ((.spec.replicas // 0) | tostring),
+            (.status.availableReplicas // 0 | tostring),
+            ([.spec.template.spec.containers[]?.image] | join(", "))
+        ] | @tsv' 2>/dev/null | sort)
+
+        # Aggregate single-replica findings into one suggestion instead of one per deployment
+        if [[ ${#single_replica[@]} -gt 0 ]]; then
+            add_suggestion "INFO" \
+                "${#single_replica[@]} deployment(s) run with only 1 replica" \
+                "No HA and guaranteed downtime during node drain/upgrade. Consider 2+ replicas and a PodDisruptionBudget. Deployments: ${single_replica[*]}"
+        fi
     fi
 
     # StatefulSets
@@ -947,10 +1090,24 @@ discover_applications() {
         kubectl get statefulsets -A 2>/dev/null | while IFS= read -r line; do
             output "  $line"
         done
-        # CSV for StatefulSets
-        echo "$sts_json" | jq -r '.items[]? | [.metadata.namespace, .metadata.name, ((.status.readyReplicas // 0) | tostring) + "/" + ((.spec.replicas // 0) | tostring), ([.spec.template.spec.containers[]?.image] | join(", "))] | @tsv' 2>/dev/null | while IFS=$'\t' read -r ns name ready images; do
+        # CSV for StatefulSets. Also flag unhealthy ones - StatefulSets carry
+        # the stateful workloads (databases, queues, agents), so one sitting at
+        # 0 ready replicas matters more than a Deployment doing the same, and
+        # nothing checked for it before.
+        while IFS=$'\t' read -r ns name ready images; do
             csv_row "\"STATEFULSET\"" "\"statefulset\"" "\"$ns\"" "\"$name\"" "\"$images\"" "\"\"" "\"ready=$ready\"" "\"\""
-        done
+
+            local sts_ready sts_desired
+            sts_ready="${ready%%/*}"
+            sts_desired="${ready##*/}"
+            if [[ "$sts_desired" != "0" && "$sts_ready" != "$sts_desired" ]]; then
+                local sts_sev="WARNING"
+                [[ "$sts_ready" == "0" ]] && sts_sev="CRITICAL"
+                add_suggestion "$sts_sev" \
+                    "StatefulSet '$name' in '$ns' has insufficient ready replicas ($ready)" \
+                    "Investigate: kubectl -n $ns describe sts $name; kubectl -n $ns logs sts/$name"
+            fi
+        done < <(echo "$sts_json" | jq -r '.items[]? | [.metadata.namespace, .metadata.name, ((.status.readyReplicas // 0) | tostring) + "/" + ((.spec.replicas // 0) | tostring), ([.spec.template.spec.containers[]?.image] | join(", "))] | @tsv' 2>/dev/null)
     fi
 
     # DaemonSets
@@ -975,9 +1132,9 @@ discover_applications() {
     sub_header "CronJobs & Jobs"
     output ""
     local cj_count
-    cj_count=$(kubectl get cronjobs -A --no-headers 2>/dev/null | grep -c '[^ ]' 2>/dev/null || echo "0")
+    cj_count=$(kubectl get cronjobs -A --no-headers 2>/dev/null | grep -c '[^ ]' 2>/dev/null || true)
     local job_count
-    job_count=$(kubectl get jobs -A --no-headers 2>/dev/null | grep -c '[^ ]' 2>/dev/null || echo "0")
+    job_count=$(kubectl get jobs -A --no-headers 2>/dev/null | grep -c '[^ ]' 2>/dev/null || true)
     output "  Total CronJobs: $cj_count"
     output "  Total Jobs    : $job_count"
     if [[ "$cj_count" -gt 0 ]]; then
@@ -993,7 +1150,7 @@ discover_applications() {
     local svc_output
     svc_output=$(kubectl get services -A --no-headers 2>/dev/null)
     local svc_count
-    svc_count=$(echo "$svc_output" | grep -c '[^ ]' 2>/dev/null || echo "0")
+    svc_count=$(echo "$svc_output" | grep -c '[^ ]' 2>/dev/null || true)
     output "  Total Services: $svc_count"
     output ""
     kubectl get services -A 2>/dev/null | while IFS= read -r line; do
@@ -1002,7 +1159,7 @@ discover_applications() {
 
     # Check for LoadBalancer services
     local lb_count
-    lb_count=$(echo "$svc_output" | grep -c "LoadBalancer" 2>/dev/null || echo "0")
+    lb_count=$(echo "$svc_output" | grep -c "LoadBalancer" 2>/dev/null || true)
     if [[ "$lb_count" -gt 0 ]]; then
         output ""
         output "  ${CYAN}LoadBalancer services detected: $lb_count${NC}"
@@ -1019,7 +1176,7 @@ discover_applications() {
     local ingress_output
     ingress_output=$(kubectl get ingress -A --no-headers 2>/dev/null)
     local ingress_count
-    ingress_count=$(echo "$ingress_output" | grep -c '[^ ]' 2>/dev/null || echo "0")
+    ingress_count=$(echo "$ingress_output" | grep -c '[^ ]' 2>/dev/null || true)
     output "  Total Ingresses: $ingress_count"
     if [[ "$ingress_count" -gt 0 ]]; then
         output ""
@@ -1034,7 +1191,7 @@ discover_applications() {
     local pvc_output
     pvc_output=$(kubectl get pvc -A --no-headers 2>/dev/null)
     local pvc_count
-    pvc_count=$(echo "$pvc_output" | grep -c '[^ ]' 2>/dev/null || echo "0")
+    pvc_count=$(echo "$pvc_output" | grep -c '[^ ]' 2>/dev/null || true)
     output "  Total PVCs: $pvc_count"
     if [[ "$pvc_count" -gt 0 ]]; then
         output ""
@@ -1076,10 +1233,40 @@ discover_applications() {
         kubectl get applications.argoproj.io -A 2>/dev/null | while IFS= read -r line; do
             output "  $line"
         done
-        # CSV: ArgoCD apps
-        echo "$argocd_apps" | jq -r '.items[]? | [.metadata.namespace, .metadata.name, (.status.sync.status // "N/A"), (.status.health.status // "N/A"), (.spec.source.repoURL // "N/A")] | @tsv' 2>/dev/null | while IFS=$'\t' read -r ns name sync health repo; do
+        # CSV + health/sync assessment. If ArgoCD is the deployment path into
+        # production, an app it cannot see or reconcile means the cluster's
+        # real state has drifted from git - previously reported as raw text
+        # only, with no suggestion raised.
+        local argo_unknown=() argo_outofsync=() argo_unhealthy=()
+        while IFS=$'\t' read -r ns name sync health repo; do
             csv_row "\"ARGOCD\"" "\"application\"" "\"$ns\"" "\"$name\"" "\"sync=$sync\"" "\"\"" "\"health=$health\"" "\"repo=$repo\""
-        done
+
+            case "$sync" in
+                Synced)    ;;
+                OutOfSync) argo_outofsync+=("$name") ;;
+                *)         argo_unknown+=("$name") ;;
+            esac
+            case "$health" in
+                Healthy|Progressing) ;;
+                *) argo_unhealthy+=("$name ($health)") ;;
+            esac
+        done < <(echo "$argocd_apps" | jq -r '.items[]? | [.metadata.namespace, .metadata.name, (.status.sync.status // "N/A"), (.status.health.status // "N/A"), (.spec.source.repoURL // "N/A")] | @tsv' 2>/dev/null)
+
+        if [[ ${#argo_unhealthy[@]} -gt 0 ]]; then
+            add_suggestion "CRITICAL" \
+                "${#argo_unhealthy[@]} ArgoCD application(s) are in a Degraded/Missing health state" \
+                "Apps: ${argo_unhealthy[*]}"
+        fi
+        if [[ ${#argo_unknown[@]} -gt 0 ]]; then
+            add_suggestion "WARNING" \
+                "${#argo_unknown[@]} ArgoCD application(s) have Unknown sync status" \
+                "ArgoCD cannot reach the source repo or the app is orphaned - it is no longer reconciling, so drift goes unnoticed. Check repo access/credentials for: ${argo_unknown[*]}"
+        fi
+        if [[ ${#argo_outofsync[@]} -gt 0 ]]; then
+            add_suggestion "WARNING" \
+                "${#argo_outofsync[@]} ArgoCD application(s) are OutOfSync" \
+                "Live state differs from git. Determine whether this is manual drift on the cluster or an un-synced commit before the next sync overwrites it. Apps: ${argo_outofsync[*]}"
+        fi
     else
         output "  ${YELLOW}(ArgoCD CRDs not found or no applications)${NC}"
     fi
@@ -1090,21 +1277,29 @@ discover_applications() {
     local all_images
     all_images=$(kubectl get pods -A -o jsonpath='{range .items[*]}{range .spec.containers[*]}{.image}{"\n"}{end}{end}' 2>/dev/null | sort | uniq -c | sort -rn)
     local unique_image_count
-    unique_image_count=$(echo "$all_images" | grep -c '[^ ]' 2>/dev/null || echo "0")
+    unique_image_count=$(echo "$all_images" | grep -c '[^ ]' 2>/dev/null || true)
     output "  Unique Container Images: $unique_image_count"
     output ""
     output "  COUNT  IMAGE"
     output "  ─────  ──────────────────────────────────────────────────"
-    echo "$all_images" | head -50 | while IFS= read -r line; do
-        if [[ -n "$line" ]]; then
+    # Text report is capped at 50 rows for readability, but the CSV gets every
+    # image - it is the machine-readable copy, and truncating it also made the
+    # HTML "unique images" card under-report.
+    local shown=0
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        local img_count img_name
+        img_count=$(echo "$line" | awk '{print $1}')
+        img_name=$(echo "$line" | awk '{print $2}')
+        csv_row "\"IMAGE\"" "\"container_image\"" "\"\"" "\"$img_name\"" "\"count=$img_count\"" "\"\"" "\"\"" "\"\""
+        if [[ "$shown" -lt 50 ]]; then
             output "  $line"
-            # CSV: image inventory
-            local img_count img_name
-            img_count=$(echo "$line" | awk '{print $1}')
-            img_name=$(echo "$line" | awk '{print $2}')
-            csv_row "\"IMAGE\"" "\"container_image\"" "\"\"" "\"$img_name\"" "\"count=$img_count\"" "\"\"" "\"\"" "\"\""
+            ((shown++)) || true
         fi
-    done
+    done < <(echo "$all_images")
+    if [[ "$unique_image_count" -gt 50 ]]; then
+        output "  ... and $((unique_image_count - 50)) more (full list in the CSV report)"
+    fi
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1128,7 +1323,7 @@ discover_security() {
         "\($ns)\t\($pod)\t\(.name)"
     ' 2>/dev/null)
     local no_limits_count
-    no_limits_count=$(echo "$pods_no_limits" | grep -c '[^ ]' 2>/dev/null || echo "0")
+    no_limits_count=$(echo "$pods_no_limits" | grep -c '[^ ]' 2>/dev/null || true)
 
     output "  Pods/Containers without limits: $no_limits_count"
     if [[ "$no_limits_count" -gt 0 ]]; then
@@ -1161,7 +1356,7 @@ discover_security() {
         "\($ns)\t\($pod)\t\(.name)"
     ' 2>/dev/null)
     local no_probes_count
-    no_probes_count=$(echo "$pods_no_probes" | grep -c '[^ ]' 2>/dev/null || echo "0")
+    no_probes_count=$(echo "$pods_no_probes" | grep -c '[^ ]' 2>/dev/null || true)
 
     output "  Pods/Containers without probes: $no_probes_count"
     if [[ "$no_probes_count" -gt 0 ]]; then
@@ -1193,18 +1388,42 @@ discover_security() {
         "\($ns)\t\($pod)\t\(.name)"
     ' 2>/dev/null)
     local priv_count
-    priv_count=$(echo "$privileged_pods" | grep -c '[^ ]' 2>/dev/null || echo "0")
+    priv_count=$(echo "$privileged_pods" | grep -c '[^ ]' 2>/dev/null || true)
 
-    output "  Privileged containers: $priv_count"
+    # Split by namespace: CSI node drivers and kube-proxy are legitimately
+    # privileged and run on every node, so a raw cluster-wide total is
+    # dominated by them (nodes x system DaemonSets) and buries the handful of
+    # workload containers that actually warrant review.
+    local priv_system=0 priv_workload=0
+    local priv_workload_list=()
     if [[ "$priv_count" -gt 0 ]]; then
         output ""
-        echo "$privileged_pods" | while IFS=$'\t' read -r ns pod container; do
-            output "  - $ns / $pod / $container"
+        while IFS=$'\t' read -r ns pod container; do
+            [[ -z "$ns" ]] && continue
             csv_row "\"SECURITY\"" "\"privileged\"" "\"$ns\"" "\"$pod\"" "\"container=$container\"" "\"Remove privileged mode\"" "\"WARNING\"" "\"\""
-        done
-        add_suggestion "WARNING" \
-            "$priv_count container(s) running in privileged mode" \
-            "Review if privileged mode is truly necessary. Use securityContext with minimal capabilities instead."
+            if [[ "$ns" == "kube-system" ]]; then
+                ((priv_system++)) || true
+            else
+                ((priv_workload++)) || true
+                output "  - $ns / $pod / $container"
+                priv_workload_list+=("$ns/$pod/$container")
+            fi
+        done < <(echo "$privileged_pods")
+
+        output ""
+        output "  Total privileged            : $priv_count"
+        output "  ├─ kube-system (expected)   : $priv_system  (CSI node drivers, kube-proxy - one set per node)"
+        output "  └─ ${BOLD}workload namespaces${NC}      : $priv_workload  ${BOLD}← review these${NC}"
+
+        if [[ "$priv_workload" -gt 0 ]]; then
+            add_suggestion "WARNING" \
+                "$priv_workload container(s) outside kube-system run in privileged mode" \
+                "A privileged container can escape to the host. Review whether each truly needs it, or replace with specific capabilities. Containers: ${priv_workload_list[*]}"
+        else
+            add_suggestion "INFO" \
+                "All $priv_count privileged containers are in kube-system (expected system components)" \
+                "No workload container runs privileged - nothing to act on here."
+        fi
     fi
 
     # Containers running as root
@@ -1224,7 +1443,7 @@ discover_security() {
         "\($ns)\t\($pod)\t\(.name)"
     ' 2>/dev/null)
     local root_count
-    root_count=$(echo "$root_pods" | grep -c '[^ ]' 2>/dev/null || echo "0")
+    root_count=$(echo "$root_pods" | grep -c '[^ ]' 2>/dev/null || true)
 
     output "  Containers potentially running as root: $root_count"
     if [[ "$root_count" -gt 0 && "$root_count" -lt 50 ]]; then
@@ -1241,7 +1460,7 @@ discover_security() {
     sub_header "Network Policies"
     output ""
     local netpol_count
-    netpol_count=$(kubectl get networkpolicies -A --no-headers 2>/dev/null | grep -c '[^ ]' 2>/dev/null || echo "0")
+    netpol_count=$(kubectl get networkpolicies -A --no-headers 2>/dev/null | grep -c '[^ ]' 2>/dev/null || true)
     output "  Total Network Policies: $netpol_count"
     if [[ "$netpol_count" -eq 0 ]]; then
         add_suggestion "INFO" \
@@ -1257,7 +1476,7 @@ discover_security() {
     sub_header "PodDisruptionBudgets"
     output ""
     local pdb_count
-    pdb_count=$(kubectl get pdb -A --no-headers 2>/dev/null | grep -c '[^ ]' 2>/dev/null || echo "0")
+    pdb_count=$(kubectl get pdb -A --no-headers 2>/dev/null | grep -c '[^ ]' 2>/dev/null || true)
     output "  Total PDBs: $pdb_count"
     if [[ "$pdb_count" -gt 0 ]]; then
         output ""
@@ -1274,13 +1493,23 @@ discover_security() {
     sub_header "HorizontalPodAutoscalers"
     output ""
     local hpa_count
-    hpa_count=$(kubectl get hpa -A --no-headers 2>/dev/null | grep -c '[^ ]' 2>/dev/null || echo "0")
+    hpa_count=$(kubectl get hpa -A --no-headers 2>/dev/null | grep -c '[^ ]' 2>/dev/null || true)
     output "  Total HPAs: $hpa_count"
     if [[ "$hpa_count" -gt 0 ]]; then
         output ""
         kubectl get hpa -A 2>/dev/null | while IFS= read -r line; do
             output "  $line"
         done
+        # An HPA with no metrics source is inert, not merely degraded
+        if [[ "${HAS_METRICS_SERVER:-false}" != "true" ]]; then
+            add_suggestion "CRITICAL" \
+                "$hpa_count HorizontalPodAutoscaler(s) exist but metrics-server is not available" \
+                "CPU/memory-based HPAs cannot read metrics, so they are silently not scaling at all - the workloads they protect are effectively running at fixed replica counts. Install metrics-server."
+        fi
+    elif [[ "${HAS_METRICS_SERVER:-false}" == "true" ]]; then
+        add_suggestion "INFO" \
+            "No HorizontalPodAutoscalers configured" \
+            "metrics-server is available, so HPAs could be used to scale workloads on demand instead of fixed replica counts."
     fi
 
     # Service Accounts with IRSA
@@ -1293,56 +1522,154 @@ discover_security() {
         "\(.metadata.namespace)\t\(.metadata.name)\t\(.metadata.annotations["eks.amazonaws.com/role-arn"])"
     ' 2>/dev/null)
     local irsa_count
-    irsa_count=$(echo "$irsa_sa" | grep -c '[^ ]' 2>/dev/null || echo "0")
+    irsa_count=$(echo "$irsa_sa" | grep -c '[^ ]' 2>/dev/null || true)
 
     output "  Service Accounts with IRSA: $irsa_count"
     if [[ "$irsa_count" -gt 0 ]]; then
         output ""
         printf "  %-20s %-30s %s\n" "NAMESPACE" "SERVICE ACCOUNT" "IAM ROLE ARN" | tee -a "$REPORT_FILE"
         printf "  %-20s %-30s %s\n" "────────────────────" "──────────────────────────────" "────────────────────────────────────" | tee -a "$REPORT_FILE"
-        echo "$irsa_sa" | while IFS=$'\t' read -r ns sa role; do
+        while IFS=$'\t' read -r ns sa role; do
+            [[ -z "$ns" ]] && continue
             printf "  %-20s %-30s %s\n" "$ns" "$sa" "$role" | tee -a "$REPORT_FILE"
             csv_row "\"SECURITY\"" "\"irsa\"" "\"$ns\"" "\"$sa\"" "\"$role\"" "\"\"" "\"OK\"" "\"\""
-        done
+
+            # An IAM role bound to a ServiceAccount in 'default' is reachable by
+            # any pod that lands there without specifying a ServiceAccount.
+            if [[ "$ns" == "default" ]]; then
+                add_suggestion "WARNING" \
+                    "ServiceAccount '$sa' in the 'default' namespace has an IAM role attached" \
+                    "Role: $role. Anything deployed into 'default' can assume it. Move the workload to a dedicated namespace, or remove the annotation if unused."
+            fi
+        done < <(echo "$irsa_sa")
     fi
 
-    # Deprecated API Detection
-    sub_header "Deprecated API Versions"
+    # Recent warning events - the fastest signal for problems that no static
+    # config check can see (image pull failures, OOMKills, failed scheduling,
+    # probe failures). Not previously collected at all.
+    sub_header "Recent Warning Events"
     output ""
-    output "  Checking for deprecated/removed API versions..."
+    local warn_events
+    warn_events=$(kubectl get events -A --field-selector type=Warning \
+        -o jsonpath='{range .items[*]}{.metadata.namespace}{"\t"}{.reason}{"\t"}{.involvedObject.kind}/{.involvedObject.name}{"\t"}{.message}{"\n"}{end}' 2>/dev/null || echo "")
+    local warn_count
+    warn_count=$(echo "$warn_events" | grep -c '[^[:space:]]' 2>/dev/null || true)
+
+    if [[ "$warn_count" -eq 0 ]]; then
+        output "  ${GREEN}✓ No warning events in the retained event window${NC}"
+    else
+        output "  Warning events (retained window, typically last ~1h): $warn_count"
+        output ""
+        # Group by reason so a single flapping pod does not dominate the list
+        local reason_summary
+        reason_summary=$(echo "$warn_events" | awk -F'\t' 'NF>1 {print $2}' | sort | uniq -c | sort -rn)
+        output "  COUNT  REASON"
+        output "  ─────  ──────────────────────────────────────────────────"
+        while IFS= read -r line; do
+            [[ -z "$line" ]] && continue
+            output "  $line"
+            local ev_count ev_reason
+            ev_count=$(echo "$line" | awk '{print $1}')
+            ev_reason=$(echo "$line" | awk '{print $2}')
+            csv_row "\"EVENT\"" "\"warning\"" "\"\"" "\"$ev_reason\"" "\"count=$ev_count\"" "\"\"" "\"WARNING\"" "\"\""
+
+            # Reasons that indicate a workload is actually broken right now
+            case "$ev_reason" in
+                Failed|FailedScheduling|FailedMount|FailedCreatePodSandBox|BackOff|OOMKilling|Evicted|ErrImagePull|ImagePullBackOff|Unhealthy|NodeNotReady)
+                    add_suggestion "WARNING" \
+                        "$ev_count recent warning event(s) with reason '$ev_reason'" \
+                        "Investigate: kubectl get events -A --field-selector type=Warning,reason=$ev_reason --sort-by=.lastTimestamp"
+                    ;;
+            esac
+        done < <(echo "$reason_summary")
+    fi
+
+    # Upgrade Readiness (EKS Cluster Insights)
+    #
+    # This replaces a hand-rolled deprecated-API scan that used:
+    #   kubectl get <kind> -A -o jsonpath="{range .items[?(@.apiVersion=='<ver>')]}..."
+    # That check produced a false positive for every kind that exists in the
+    # cluster: items inside a typed List response do not carry an apiVersion
+    # field, so the filter never matches meaningfully and the template still
+    # emits a bare "/". It also cannot work in principle - an API removed in
+    # 1.22 cannot be served by a 1.32 API server, so kubectl can never return
+    # one. AWS already runs this analysis server-side against real audit data.
+    sub_header "Upgrade Readiness (EKS Cluster Insights)"
     output ""
 
-    # Define deprecated APIs for recent K8s versions
-    local deprecated_found=0
-    local deprecated_apis=(
-        "extensions/v1beta1:Ingress:Removed in 1.22 → use networking.k8s.io/v1"
-        "networking.k8s.io/v1beta1:Ingress:Removed in 1.22 → use networking.k8s.io/v1"
-        "rbac.authorization.k8s.io/v1beta1:ClusterRole:Removed in 1.22 → use rbac.authorization.k8s.io/v1"
-        "rbac.authorization.k8s.io/v1beta1:ClusterRoleBinding:Removed in 1.22 → use rbac.authorization.k8s.io/v1"
-        "policy/v1beta1:PodDisruptionBudget:Removed in 1.25 → use policy/v1"
-        "policy/v1beta1:PodSecurityPolicy:Removed in 1.25"
-        "batch/v1beta1:CronJob:Removed in 1.25 → use batch/v1"
-        "autoscaling/v2beta1:HorizontalPodAutoscaler:Removed in 1.26 → use autoscaling/v2"
-        "flowcontrol.apiserver.k8s.io/v1beta2:FlowSchema:Removed in 1.29 → use flowcontrol.apiserver.k8s.io/v1"
-        "flowcontrol.apiserver.k8s.io/v1beta3:FlowSchema:Removed in 1.32 → use flowcontrol.apiserver.k8s.io/v1"
-    )
+    local insights_json
+    insights_json=$(aws eks list-insights \
+        --cluster-name "$CLUSTER_NAME" \
+        --region "$REGION" \
+        --filter '{"categories":["UPGRADE_READINESS"]}' \
+        --output json 2>/dev/null || echo "")
 
-    for entry in "${deprecated_apis[@]}"; do
-        IFS=':' read -r api_version kind message <<< "$entry"
-        local found_resources
-        found_resources=$(kubectl get "$kind" -A -o jsonpath="{range .items[?(@.apiVersion=='$api_version')]}{.metadata.namespace}/{.metadata.name} " 2>/dev/null || echo "")
-        if [[ -n "$found_resources" && "$found_resources" != " " ]]; then
-            output "  ${RED}⚠ $api_version/$kind${NC}: $message"
-            output "    Resources: $found_resources"
-            ((deprecated_found++)) || true
-            add_suggestion "WARNING" \
-                "Deprecated API '$api_version' found for kind '$kind'" \
-                "$message. Resources: $found_resources"
-        fi
-    done
+    if [[ -z "$insights_json" ]]; then
+        output "  ${YELLOW}(EKS Cluster Insights unavailable - needs AWS CLI v2.17+ and eks:ListInsights)${NC}"
+        output "  Run one of these to check deprecated APIs before upgrading:"
+        output "    pluto detect-all-in-cluster"
+        output "    kubent"
+        add_suggestion "INFO" \
+            "Deprecated API check was skipped - EKS Cluster Insights not available" \
+            "Update AWS CLI and grant eks:ListInsights, or run 'pluto detect-all-in-cluster' / 'kubent' manually before upgrading."
+        return
+    fi
 
-    if [[ "$deprecated_found" -eq 0 ]]; then
-        output "  ${GREEN}✓ No deprecated API versions detected${NC}"
+    local insight_count
+    insight_count=$(echo "$insights_json" | jq -r '.insights | length' 2>/dev/null || echo "0")
+    output "  Total upgrade-readiness insights: $insight_count"
+    output ""
+
+    local issues_found=0
+    local ins_id ins_name ins_status ins_desc
+    while IFS=$'\t' read -r ins_id ins_name ins_status; do
+        [[ -z "$ins_id" ]] && continue
+
+        case "$ins_status" in
+            PASSING)
+                output "  ${GREEN}✓${NC} $ins_name"
+                continue
+                ;;
+            ERROR|WARNING)
+                output "  ${RED}⚠ $ins_name${NC} [$ins_status]"
+                ;;
+            *)
+                output "  ${YELLOW}? $ins_name${NC} [$ins_status]"
+                continue
+                ;;
+        esac
+
+        ((issues_found++)) || true
+
+        # Pull the detail (which resources / client user-agents triggered it)
+        local detail_json
+        detail_json=$(aws eks describe-insight \
+            --cluster-name "$CLUSTER_NAME" \
+            --id "$ins_id" \
+            --region "$REGION" \
+            --output json 2>/dev/null || echo "")
+
+        ins_desc=$(echo "$detail_json" | jq -r '.insight.description // ""' 2>/dev/null || echo "")
+        local ins_resources
+        ins_resources=$(echo "$detail_json" | jq -r '
+            [.insight.categorySpecificSummary.deprecationDetails[]?
+             | .usage // .clientStats[]?.userAgent // empty] | unique | join("; ")' 2>/dev/null || echo "")
+
+        [[ -n "$ins_desc" ]] && output "    $ins_desc"
+        [[ -n "$ins_resources" ]] && output "    Detected: $ins_resources"
+
+        local severity="WARNING"
+        [[ "$ins_status" == "ERROR" ]] && severity="CRITICAL"
+        add_suggestion "$severity" \
+            "Upgrade readiness check failed: $ins_name" \
+            "${ins_desc}${ins_resources:+ Detected: $ins_resources}"
+
+        csv_row "\"UPGRADE_READINESS\"" "\"insight\"" "\"\"" "\"$ins_name\"" "\"$ins_status\"" "\"PASSING\"" "\"$ins_status\"" "\"$ins_resources\""
+    done < <(echo "$insights_json" | jq -r '.insights[]? | [.id, .name, .insightStatus.status] | @tsv' 2>/dev/null)
+
+    if [[ "$issues_found" -eq 0 && "$insight_count" -gt 0 ]]; then
+        output ""
+        output "  ${GREEN}✓ All upgrade-readiness checks passing${NC}"
     fi
 }
 
@@ -1665,11 +1992,11 @@ EOF
     # ── Summary Cards ──
     # Count categories from CSV
     local total_nodegroups total_nodes total_addons total_deployments total_images
-    total_nodegroups=$(grep -c '"NODE_GROUP"' "$CSV_FILE" 2>/dev/null || echo "0")
-    total_nodes=$(grep -c '"NODE"' "$CSV_FILE" 2>/dev/null || echo "0")
-    total_addons=$(grep -c '"ADDON"' "$CSV_FILE" 2>/dev/null || echo "0")
-    total_deployments=$(grep -c '"DEPLOYMENT"' "$CSV_FILE" 2>/dev/null || echo "0")
-    total_images=$(grep -c '"IMAGE"' "$CSV_FILE" 2>/dev/null || echo "0")
+    total_nodegroups=$(grep -c '"NODE_GROUP"' "$CSV_FILE" 2>/dev/null || true)
+    total_nodes=$(grep -c '"NODE"' "$CSV_FILE" 2>/dev/null || true)
+    total_addons=$(grep -c '"ADDON"' "$CSV_FILE" 2>/dev/null || true)
+    total_deployments=$(grep -c '"DEPLOYMENT"' "$CSV_FILE" 2>/dev/null || true)
+    total_images=$(grep -c '"IMAGE"' "$CSV_FILE" 2>/dev/null || true)
 
     cat >> "$HTML_FILE" <<EOF
 <div class="summary-cards">
@@ -1859,6 +2186,8 @@ EOF
     html_table_from_csv "ARGOCD" "ArgoCD Applications" "🔄"
     html_table_from_csv "IMAGE" "Container Images" "🐳"
     html_table_from_csv "SECURITY" "Security Findings" "🔒"
+    html_table_from_csv "UPGRADE_READINESS" "Upgrade Readiness (EKS Insights)" "🚦"
+    html_table_from_csv "EVENT" "Recent Warning Events" "🔔"
 
     # ── Full Text Report (collapsible) ──
     cat >> "$HTML_FILE" <<'EOF'
