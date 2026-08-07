@@ -396,9 +396,9 @@ discover_cluster_info() {
     local vpc_id
     vpc_id=$(echo "$cluster_json" | jq -r '.cluster.resourcesVpcConfig.vpcId // "N/A"')
     local subnet_ids
-    subnet_ids=$(echo "$cluster_json" | jq -r '.cluster.resourcesVpcConfig.subnetIds | join(", ") // "N/A"')
+    subnet_ids=$(echo "$cluster_json" | jq -r 'if (.cluster.resourcesVpcConfig.subnetIds | type) == "array" and (.cluster.resourcesVpcConfig.subnetIds | length) > 0 then .cluster.resourcesVpcConfig.subnetIds | join(", ") else "N/A" end' 2>/dev/null || echo "N/A")
     local sg_ids
-    sg_ids=$(echo "$cluster_json" | jq -r '.cluster.resourcesVpcConfig.securityGroupIds | join(", ") // "N/A"')
+    sg_ids=$(echo "$cluster_json" | jq -r 'if (.cluster.resourcesVpcConfig.securityGroupIds | type) == "array" and (.cluster.resourcesVpcConfig.securityGroupIds | length) > 0 then .cluster.resourcesVpcConfig.securityGroupIds | join(", ") else "N/A" end' 2>/dev/null || echo "N/A")
     local cluster_sg
     cluster_sg=$(echo "$cluster_json" | jq -r '.cluster.resourcesVpcConfig.clusterSecurityGroupId // "N/A"')
     local public_access
@@ -493,7 +493,7 @@ discover_node_groups() {
             ng_status=$(echo "$ng_json" | jq -r '.nodegroup.status // "N/A"')
             ng_version=$(echo "$ng_json" | jq -r '.nodegroup.version // "N/A"')
             ng_ami_type=$(echo "$ng_json" | jq -r '.nodegroup.amiType // "N/A"')
-            ng_instance_types=$(echo "$ng_json" | jq -r '.nodegroup.instanceTypes | join(", ") // "N/A"')
+            ng_instance_types=$(echo "$ng_json" | jq -r 'if (.nodegroup.instanceTypes | type) == "array" and (.nodegroup.instanceTypes | length) > 0 then .nodegroup.instanceTypes | join(", ") else "N/A" end' 2>/dev/null || echo "N/A")
             ng_desired=$(echo "$ng_json" | jq -r '.nodegroup.scalingConfig.desiredSize // "N/A"')
             ng_min=$(echo "$ng_json" | jq -r '.nodegroup.scalingConfig.minSize // "N/A"')
             ng_max=$(echo "$ng_json" | jq -r '.nodegroup.scalingConfig.maxSize // "N/A"')
@@ -502,9 +502,9 @@ discover_node_groups() {
             capacity_type=$(echo "$ng_json" | jq -r '.nodegroup.capacityType // "ON_DEMAND"')
             ng_launch_template=$(echo "$ng_json" | jq -r '.nodegroup.launchTemplate.name // "N/A"')
             ng_lt_version=$(echo "$ng_json" | jq -r '.nodegroup.launchTemplate.version // "N/A"')
-            ng_labels=$(echo "$ng_json" | jq -r '.nodegroup.labels | to_entries | map(.key + "=" + .value) | join(", ") // "none"' 2>/dev/null || echo "none")
-            ng_taints=$(echo "$ng_json" | jq -r '.nodegroup.taints | map(.key + "=" + (.value // "") + ":" + .effect) | join(", ") // "none"' 2>/dev/null || echo "none")
-            ng_subnets=$(echo "$ng_json" | jq -r '.nodegroup.subnets | join(", ") // "N/A"')
+            ng_labels=$(echo "$ng_json" | jq -r 'if (.nodegroup.labels | type) == "object" and (.nodegroup.labels | length) > 0 then .nodegroup.labels | to_entries | map(.key + "=" + .value) | join(", ") else "none" end' 2>/dev/null || echo "none")
+            ng_taints=$(echo "$ng_json" | jq -r 'if (.nodegroup.taints | type) == "array" and (.nodegroup.taints | length) > 0 then .nodegroup.taints | map(.key + "=" + (.value // "") + ":" + .effect) | join(", ") else "none" end' 2>/dev/null || echo "none")
+            ng_subnets=$(echo "$ng_json" | jq -r 'if (.nodegroup.subnets | type) == "array" and (.nodegroup.subnets | length) > 0 then .nodegroup.subnets | join(", ") else "N/A" end' 2>/dev/null || echo "N/A")
 
             # Detect node AMI ID from launch template or release version
             local ng_ami_id="N/A"
@@ -652,7 +652,7 @@ discover_node_groups() {
 
             local fp_status fp_selectors
             fp_status=$(echo "$fp_json" | jq -r '.fargateProfile.status // "N/A"')
-            fp_selectors=$(echo "$fp_json" | jq -r '.fargateProfile.selectors | map(.namespace) | join(", ") // "N/A"')
+            fp_selectors=$(echo "$fp_json" | jq -r 'if (.fargateProfile.selectors | type) == "array" and (.fargateProfile.selectors | length) > 0 then [.fargateProfile.selectors[].namespace] | join(", ") else "N/A" end' 2>/dev/null || echo "N/A")
 
             output "  ┌─ Fargate Profile: ${BOLD}$fp_name${NC}"
             output "  │  Status      : $fp_status"
