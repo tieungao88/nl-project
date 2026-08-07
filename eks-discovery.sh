@@ -899,7 +899,7 @@ discover_applications() {
             .metadata.name,
             ((.status.readyReplicas // 0) | tostring) + "/" + ((.spec.replicas // 0) | tostring),
             (.status.availableReplicas // 0 | tostring),
-            ([.spec.template.spec.containers[].image] | join(", "))
+            ([.spec.template.spec.containers[]?.image] | join(", "))
         ] | @tsv' 2>/dev/null | sort | while IFS=$'\t' read -r ns name ready avail images; do
             printf "  %-25s %-40s %-8s %-8s %s\n" "$ns" "$name" "$ready" "$avail" "$images" | tee -a "$REPORT_FILE"
 
@@ -948,7 +948,7 @@ discover_applications() {
             output "  $line"
         done
         # CSV for StatefulSets
-        echo "$sts_json" | jq -r '.items[] | [.metadata.namespace, .metadata.name, ((.status.readyReplicas // 0) | tostring) + "/" + ((.spec.replicas // 0) | tostring), ([.spec.template.spec.containers[].image] | join(", "))] | @tsv' 2>/dev/null | while IFS=$'\t' read -r ns name ready images; do
+        echo "$sts_json" | jq -r '.items[]? | [.metadata.namespace, .metadata.name, ((.status.readyReplicas // 0) | tostring) + "/" + ((.spec.replicas // 0) | tostring), ([.spec.template.spec.containers[]?.image] | join(", "))] | @tsv' 2>/dev/null | while IFS=$'\t' read -r ns name ready images; do
             csv_row "\"STATEFULSET\"" "\"statefulset\"" "\"$ns\"" "\"$name\"" "\"$images\"" "\"\"" "\"ready=$ready\"" "\"\""
         done
     fi
@@ -966,7 +966,7 @@ discover_applications() {
         kubectl get daemonsets -A 2>/dev/null | while IFS= read -r line; do
             output "  $line"
         done
-        echo "$ds_json" | jq -r '.items[] | [.metadata.namespace, .metadata.name, (.status.desiredNumberScheduled | tostring), ([.spec.template.spec.containers[].image] | join(", "))] | @tsv' 2>/dev/null | while IFS=$'\t' read -r ns name desired images; do
+        echo "$ds_json" | jq -r '.items[]? | [.metadata.namespace, .metadata.name, (.status.desiredNumberScheduled | tostring), ([.spec.template.spec.containers[]?.image] | join(", "))] | @tsv' 2>/dev/null | while IFS=$'\t' read -r ns name desired images; do
             csv_row "\"DAEMONSET\"" "\"daemonset\"" "\"$ns\"" "\"$name\"" "\"$images\"" "\"\"" "\"desired=$desired\"" "\"\""
         done
     fi
@@ -1009,7 +1009,7 @@ discover_applications() {
     fi
 
     # CSV: Services
-    kubectl get services -A -o json 2>/dev/null | jq -r '.items[] | [.metadata.namespace, .metadata.name, .spec.type, (.spec.ports | map(.port | tostring) | join(";")), (.spec.clusterIP // "N/A")] | @tsv' 2>/dev/null | while IFS=$'\t' read -r ns name stype ports cip; do
+    kubectl get services -A -o json 2>/dev/null | jq -r '.items[]? | [.metadata.namespace, .metadata.name, .spec.type, (if .spec.ports != null then (.spec.ports | map(.port | tostring) | join(";")) else "none" end), (.spec.clusterIP // "N/A")] | @tsv' 2>/dev/null | while IFS=$'\t' read -r ns name stype ports cip; do
         csv_row "\"SERVICE\"" "\"service\"" "\"$ns\"" "\"$name\"" "\"type=$stype\"" "\"\"" "\"\"" "\"ports=$ports, clusterIP=$cip\""
     done
 
@@ -1056,7 +1056,7 @@ discover_applications() {
             output ""
             printf "  %-25s %-30s %-15s %-12s %s\n" "NAMESPACE" "NAME" "CHART" "APP VERSION" "STATUS" | tee -a "$REPORT_FILE"
             printf "  %-25s %-30s %-15s %-12s %s\n" "─────────────────────────" "──────────────────────────────" "───────────────" "────────────" "──────" | tee -a "$REPORT_FILE"
-            echo "$helm_output" | jq -r '.[] | [.namespace, .name, .chart, .app_version, .status] | @tsv' 2>/dev/null | sort | while IFS=$'\t' read -r ns name chart appver status; do
+            echo "$helm_output" | jq -r '.[]? | [.namespace, .name, .chart, .app_version, .status] | @tsv' 2>/dev/null | sort | while IFS=$'\t' read -r ns name chart appver status; do
                 printf "  %-25s %-30s %-15s %-12s %s\n" "$ns" "$name" "$chart" "$appver" "$status" | tee -a "$REPORT_FILE"
                 csv_row "\"HELM\"" "\"helm_release\"" "\"$ns\"" "\"$name\"" "\"$chart\"" "\"\"" "\"$status\"" "\"app_version=$appver\""
             done
@@ -1077,7 +1077,7 @@ discover_applications() {
             output "  $line"
         done
         # CSV: ArgoCD apps
-        echo "$argocd_apps" | jq -r '.items[] | [.metadata.namespace, .metadata.name, (.status.sync.status // "N/A"), (.status.health.status // "N/A"), (.spec.source.repoURL // "N/A")] | @tsv' 2>/dev/null | while IFS=$'\t' read -r ns name sync health repo; do
+        echo "$argocd_apps" | jq -r '.items[]? | [.metadata.namespace, .metadata.name, (.status.sync.status // "N/A"), (.status.health.status // "N/A"), (.spec.source.repoURL // "N/A")] | @tsv' 2>/dev/null | while IFS=$'\t' read -r ns name sync health repo; do
             csv_row "\"ARGOCD\"" "\"application\"" "\"$ns\"" "\"$name\"" "\"sync=$sync\"" "\"\"" "\"health=$health\"" "\"repo=$repo\""
         done
     else
