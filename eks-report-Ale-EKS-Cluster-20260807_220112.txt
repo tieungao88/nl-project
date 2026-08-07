@@ -1,0 +1,912 @@
+═══════════════════════════════════════════════════════════════
+   EKS CLUSTER DISCOVERY & UPGRADE REPORT
+   Cluster: Ale-EKS-Cluster | Region: ap-southeast-1
+   Generated: 2026-08-07 22:01:12 UTC
+   Script Version: 1.2.0
+═══════════════════════════════════════════════════════════════
+
+📋 SECTION 1: CLUSTER OVERVIEW
+─────────────────────────────────────────────────────────────────
+  Cluster Name      : Ale-EKS-Cluster
+  Kubernetes Version: 1.32
+  Platform Version  : eks.50
+  Status            : ACTIVE
+  Support Status    : ⚠️  EXTENDED SUPPORT
+  Support Detail    : Extended support ends: 2027-03-23 (cost: $0.60/hr vs $0.10/hr)
+  Created At        : 2023-07-25T16:05:37.185000+00:00
+  Endpoint          : https://23BB0E70942A994D661269B574681A6E.gr7.ap-southeast-1.eks.amazonaws.com
+  Region            : ap-southeast-1
+
+  ▸ Networking
+  VPC ID            : vpc-024d6e1b698cb8267
+  Subnets           : subnet-0636fc2afd490380a, subnet-0aed1b1336c64b4a8
+  Security Groups   : N/A
+  Cluster SG        : sg-07793fc0a4a6203b5
+  Public Access     : true
+  Private Access    : true
+
+  ▸ Control Plane Logging
+  Logging Enabled   : No
+
+  ▸ Encryption
+  Secrets Encryption: Not configured
+
+  ▸ Identity
+  OIDC Issuer       : https://oidc.eks.ap-southeast-1.amazonaws.com/id/23BB0E70942A994D661269B574681A6E
+  Auth Mode         : API_AND_CONFIG_MAP
+
+🖥️ SECTION 2: NODE GROUPS
+─────────────────────────────────────────────────────────────────
+
+  ▸ Managed Node Groups (AWS API)
+  Total Managed Node Groups: 7
+
+  ┌─ Node Group: Ale-EKS-App-Priority
+  │  Status         : ACTIVE
+  │  K8s Version    : 1.32
+  │  AMI Type       : AL2_x86_64
+  │  AMI Status     : ⛔ AL2 (UNSUPPORTED)
+  │  AMI Migrate To : AL2023_x86_64_STANDARD
+  │  AMI Release    : 1.32.9-20251209
+  │  Instance Types : t3a.xlarge
+  │  Capacity Type  : ON_DEMAND
+  │  Disk Size (GB) : 30
+  │  Scaling        : min=2, desired=3, max=4
+  │  Labels         : name=ale-eks-app-priority
+  │  Taints         : none
+  │  Subnets        : subnet-0636fc2afd490380a, subnet-0aed1b1336c64b4a8
+  └──────────────────────────────────────
+  ┌─ Node Group: Ale-EKS-NG
+  │  Status         : ACTIVE
+  │  K8s Version    : 1.32
+  │  AMI Type       : AL2_x86_64
+  │  AMI Status     : ⛔ AL2 (UNSUPPORTED)
+  │  AMI Migrate To : AL2023_x86_64_STANDARD
+  │  AMI Release    : 1.32.9-20251209
+  │  Instance Types : t3.medium
+  │  Capacity Type  : ON_DEMAND
+  │  Disk Size (GB) : 30
+  │  Scaling        : min=5, desired=6, max=7
+  │  Labels         : none
+  │  Taints         : none
+  │  Subnets        : subnet-0636fc2afd490380a, subnet-0aed1b1336c64b4a8
+  └──────────────────────────────────────
+  ┌─ Node Group: Ale-Eks-App-BE
+  │  Status         : ACTIVE
+  │  K8s Version    : 1.32
+  │  AMI Type       : AL2_x86_64
+  │  AMI Status     : ⛔ AL2 (UNSUPPORTED)
+  │  AMI Migrate To : AL2023_x86_64_STANDARD
+  │  AMI Release    : 1.32.9-20251209
+  │  Instance Types : t3.large
+  │  Capacity Type  : ON_DEMAND
+  │  Disk Size (GB) : 30
+  │  Scaling        : min=1, desired=2, max=3
+  │  Labels         : name=app_backend
+  │  Taints         : none
+  │  Subnets        : subnet-0636fc2afd490380a, subnet-0aed1b1336c64b4a8
+  └──────────────────────────────────────
+  ┌─ Node Group: Ale-Eks-App-Core
+  │  Status         : ACTIVE
+  │  K8s Version    : 1.32
+  │  AMI Type       : AL2_x86_64
+  │  AMI Status     : ⛔ AL2 (UNSUPPORTED)
+  │  AMI Migrate To : AL2023_x86_64_STANDARD
+  │  AMI Release    : 1.32.9-20251209
+  │  Instance Types : t3.large
+  │  Capacity Type  : ON_DEMAND
+  │  Disk Size (GB) : 30
+  │  Scaling        : min=1, desired=2, max=3
+  │  Labels         : name=app_core
+  │  Taints         : none
+  │  Subnets        : subnet-0636fc2afd490380a, subnet-0aed1b1336c64b4a8
+  └──────────────────────────────────────
+  ┌─ Node Group: Ale-Eks-App-Isolation
+  │  Status         : ACTIVE
+  │  K8s Version    : 1.32
+  │  AMI Type       : AL2_x86_64
+  │  AMI Status     : ⛔ AL2 (UNSUPPORTED)
+  │  AMI Migrate To : AL2023_x86_64_STANDARD
+  │  AMI Release    : 1.32.9-20251209
+  │  Instance Types : r5a.large
+  │  Capacity Type  : ON_DEMAND
+  │  Disk Size (GB) : 30
+  │  Scaling        : min=1, desired=2, max=4
+  │  Labels         : name=ale-eks-app-isolation
+  │  Taints         : none
+  │  Subnets        : subnet-0636fc2afd490380a, subnet-0aed1b1336c64b4a8
+  └──────────────────────────────────────
+  ┌─ Node Group: Ale-Eks-Prometheus-NG
+  │  Status         : ACTIVE
+  │  K8s Version    : 1.32
+  │  AMI Type       : AL2_x86_64
+  │  AMI Status     : ⛔ AL2 (UNSUPPORTED)
+  │  AMI Migrate To : AL2023_x86_64_STANDARD
+  │  AMI Release    : 1.32.9-20251209
+  │  Instance Types : t3.large
+  │  Capacity Type  : ON_DEMAND
+  │  Disk Size (GB) : 30
+  │  Scaling        : min=1, desired=2, max=3
+  │  Labels         : name=prometheus_grafana
+  │  Taints         : none
+  │  Subnets        : subnet-0636fc2afd490380a, subnet-0aed1b1336c64b4a8
+  └──────────────────────────────────────
+  ┌─ Node Group: Prometheus-NG
+  │  Status         : ACTIVE
+  │  K8s Version    : 1.32
+  │  AMI Type       : AL2023_x86_64_STANDARD
+  │  AMI Status     : ✅ AL2023 (Current)
+  │  AMI Release    : 1.32.12-20260318
+  │  AMI ID         : None
+  │  Instance Types : N/A
+  │  Capacity Type  : ON_DEMAND
+  │  Disk Size (GB) : N/A
+  │  Scaling        : min=0, desired=0, max=2
+  │  Launch Template: lt-t3-medium (v1)
+  │  Labels         : app=prometheus-ng
+  │  Taints         : none
+  │  Subnets        : subnet-0636fc2afd490380a, subnet-0aed1b1336c64b4a8
+  └──────────────────────────────────────
+
+  ▸ Fargate Profiles
+  Total Fargate Profiles: 0
+
+  ▸ Nodes (kubectl)
+
+  Total Nodes: 17
+
+  NODE NAME                                STATUS   KUBELET VERSION    INSTANCE TYPE   OS IMAGE             ARCH
+  ──────────────────────────────────────── ──────── ────────────────── ─────────────── ──────────────────── ──────
+  ip-10-16-41-101.ap-southeast-1.compute.internal Ready    v1.32.9-eks-ecaa3a6 t3a.xlarge      Amazon Linux 2       amd64
+  ip-10-16-41-114.ap-southeast-1.compute.internal Ready    v1.32.9-eks-ecaa3a6 t3.large        Amazon Linux 2       amd64
+  ip-10-16-41-117.ap-southeast-1.compute.internal Ready    v1.32.9-eks-ecaa3a6 r5a.large       Amazon Linux 2       amd64
+  ip-10-16-41-12.ap-southeast-1.compute.internal Ready    v1.32.9-eks-ecaa3a6 t3a.xlarge      Amazon Linux 2       amd64
+  ip-10-16-41-152.ap-southeast-1.compute.internal Ready    v1.32.9-eks-ecaa3a6 t3.medium       Amazon Linux 2       amd64
+  ip-10-16-41-44.ap-southeast-1.compute.internal Ready    v1.32.9-eks-ecaa3a6 t3.large        Amazon Linux 2       amd64
+  ip-10-16-41-6.ap-southeast-1.compute.internal Ready    v1.32.9-eks-ecaa3a6 t3.medium       Amazon Linux 2       amd64
+  ip-10-16-41-76.ap-southeast-1.compute.internal Ready    v1.32.9-eks-ecaa3a6 t3.medium       Amazon Linux 2       amd64
+  ip-10-16-41-83.ap-southeast-1.compute.internal Ready    v1.32.9-eks-ecaa3a6 t3.large        Amazon Linux 2       amd64
+  ip-10-16-42-144.ap-southeast-1.compute.internal Ready    v1.32.9-eks-ecaa3a6 t3.large        Amazon Linux 2       amd64
+  ip-10-16-42-145.ap-southeast-1.compute.internal Ready    v1.32.9-eks-ecaa3a6 r5a.large       Amazon Linux 2       amd64
+  ip-10-16-42-149.ap-southeast-1.compute.internal Ready    v1.32.9-eks-ecaa3a6 t3.medium       Amazon Linux 2       amd64
+  ip-10-16-42-156.ap-southeast-1.compute.internal Ready    v1.32.9-eks-ecaa3a6 t3.large        Amazon Linux 2       amd64
+  ip-10-16-42-23.ap-southeast-1.compute.internal Ready    v1.32.9-eks-ecaa3a6 t3.medium       Amazon Linux 2       amd64
+  ip-10-16-42-43.ap-southeast-1.compute.internal Ready    v1.32.9-eks-ecaa3a6 t3.large        Amazon Linux 2       amd64
+  ip-10-16-42-67.ap-southeast-1.compute.internal Ready    v1.32.9-eks-ecaa3a6 t3.medium       Amazon Linux 2       amd64
+  ip-10-16-42-71.ap-southeast-1.compute.internal Ready    v1.32.9-eks-ecaa3a6 t3a.xlarge      Amazon Linux 2       amd64
+
+  ▸ Node Resource Summary
+
+  (metrics-server not available - kubectl top nodes failed)
+
+  ▸ AL2 → AL2023 Migration Reference
+
+  Amazon Linux 2 (AL2) EKS AMI Timeline:
+  ├─ EKS AMI support ended : Nov 26, 2025
+  ├─ AL2 OS End of Life    : Jun 30, 2026
+  └─ AL2023 is the default since EKS 1.30+
+
+  AL2 → AL2023 Key Differences:
+  ├─ cgroup v1 → cgroup v2 (check monitoring tools compatibility)
+  ├─ IMDSv1 allowed → IMDSv2 enforced (check SDK/app IMDS calls)
+  ├─ bootstrap.sh → nodeadm (YAML-based) (update user data scripts)
+  ├─ yum → dnf (update package manager commands)
+  ├─ Amazon Linux extras → not available (use dnf packages)
+  └─ kernel 5.10 → kernel 6.1 (check kernel module compatibility)
+
+  Migration Strategy (No in-place upgrade supported):
+  1. Create new node group with AL2023 AMI type
+  2. Cordon old AL2 nodes (kubectl cordon <node>)
+  3. Drain old AL2 nodes (kubectl drain <node> --ignore-daemonsets --delete-emptydir-data)
+  4. Verify workloads on new AL2023 nodes
+  5. Delete old AL2 node group
+
+🔌 SECTION 3: EKS ADD-ONS
+─────────────────────────────────────────────────────────────────
+
+  ▸ Managed EKS Add-ons
+
+  ┌─ Add-on: aws-ebs-csi-driver
+  │  Version         : v1.40.0-eksbuild.1
+  │  Status          : ACTIVE
+  │  Health Issues   : 0
+  │  Update Available: Yes → v1.63.1-eksbuild.1
+  └──────────────────────────────────────
+  ┌─ Add-on: aws-efs-csi-driver
+  │  Version         : v2.1.6-eksbuild.1
+  │  Status          : ACTIVE
+  │  Health Issues   : 0
+  │  Update Available: Yes → v3.4.1-eksbuild.1
+  └──────────────────────────────────────
+  ┌─ Add-on: kube-proxy
+  │  Version         : v1.32.6-eksbuild.12
+  │  Status          : ACTIVE
+  │  Health Issues   : 0
+  │  Update Available: Yes → v1.32.13-eksbuild.21
+  └──────────────────────────────────────
+
+  ▸ Core Component Versions (from cluster)
+
+  CoreDNS Image   : 602401143452.dkr.ecr.ap-southeast-1.amazonaws.com/eks/coredns:v1.10.1-eksbuild.1
+  kube-proxy Image: 602401143452.dkr.ecr.ap-southeast-1.amazonaws.com/eks/kube-proxy:v1.32.6-minimal-eksbuild.12
+  VPC CNI Image   : 602401143452.dkr.ecr.ap-southeast-1.amazonaws.com/amazon-k8s-cni:v1.12.6-eksbuild.2
+  EBS CSI Image   : 602401143452.dkr.ecr.ap-southeast-1.amazonaws.com/eks/aws-ebs-csi-driver:v1.40.0
+
+📦 SECTION 4: APPLICATIONS & WORKLOADS
+─────────────────────────────────────────────────────────────────
+
+  ▸ Namespaces
+
+  Total Namespaces: 36
+
+  - alepay-prod (Active)
+  - amazon-cloudwatch (Active)
+  - argocd (Active)
+  - cattle-fleet-clusters-system (Active)
+  - cattle-fleet-local-system (Active)
+  - cattle-fleet-system (Active)
+  - cattle-global-data (Active)
+  - cattle-global-nt (Active)
+  - cattle-impersonation-system (Active)
+  - cattle-provisioning-capi-system (Active)
+  - cattle-system (Active)
+  - cattle-ui-plugin-system (Active)
+  - cert-manager (Active)
+  - cluster-fleet-local-local-1a3d67d0a899 (Active)
+  - default (Active)
+  - fleet-default (Active)
+  - fleet-local (Active)
+  - kube-node-lease (Active)
+  - kube-public (Active)
+  - kube-system (Active)
+  - local (Active)
+  - monitoring (Active)
+  - nginx-ingress (Active)
+  - p-lb6dm (Active)
+  - p-wz4gb (Active)
+  - p-xfk8m (Active)
+  - u-67cmn (Active)
+  - u-7lm5h (Active)
+  - u-9m22d (Active)
+  - u-b4sx6 (Active)
+  - u-fwqd4 (Active)
+  - u-gdx4p (Active)
+  - u-lv525 (Active)
+  - u-sp49n (Active)
+  - u-wl9s4 (Active)
+  - user-psdp8 (Active)
+
+  ▸ Deployments
+
+  Total Deployments: 50
+
+  NAMESPACE                 NAME                                     READY    AVAIL    IMAGES
+  ───────────────────────── ──────────────────────────────────────── ──────── ──────── ──────────────────────
+  alepay-prod               alepay-admintool                         1/1      1        hub.saobang.vn/alepay/admintool:master-db51f35a5f2eed6849400efb49b1a9fe0cd48370
+  alepay-prod               alepay-api-v3-service                    4/4      4        hub.saobang.vn/alepay/alepay-api-v3-service:master-master-v2.26
+  alepay-prod               alepay-bi-report                         1/1      1        hub.saobang.vn/alepay/alepay-bi-report-core:master-v2.0.392
+  alepay-prod               alepay-checkout-v3-service               2/2      2        hub.saobang.vn/alepay/alepay-checkout-v3-service:master-v7.57
+  alepay-prod               alepay-core-checkout-v3                  2/2      2        hub.saobang.vn/alepay/alepay-core-checkout-v3:master-v1.0.274
+  alepay-prod               alepay-core-export                       1/1      1        hub.saobang.vn/alepay/alepay-export:master-v2.0.271
+  alepay-prod               alepay-core-get-info                     3/3      3        hub.saobang.vn/alepay/core-get-info:master-v1.0.88
+  alepay-prod               alepay-gateway                           1/1      1        hub.saobang.vn/alepay/alepay-gateway:master-v1.0.26
+  alepay-prod               alepay-merchant-frontend-java            1/1      1        hub.saobang.vn/alepay/alepay-merchant-frontend-java:master-v1.56
+  alepay-prod               alepay-merchant-v3                       2/2      2        hub.saobang.vn/alepay/alepay-merchant-v3:master-v3.1.81
+  alepay-prod               alepay-pay-all-microform                 1/1      1        hub.saobang.vn/alepay/alepay-pay-all-microform:master-v1.47
+  alepay-prod               alepay-payment-microform                 1/1      1        hub.saobang.vn/alepay/alepay-payment-microform:master-v1.23
+  alepay-prod               alepay-provider                          1/1      1        hub.saobang.vn/alepay/provider:v1.0.18
+  alepay-prod               alepay-schedule                          1/1      1        hub.saobang.vn/alepay/alepay-schedule:master-v1.0.218
+  alepay-prod               alepay-token-microform                   1/1      1        hub.saobang.vn/alepay/alepay-token-microform:master-v1.15
+  alepay-prod               api-partner                              1/1      1        hub.saobang.vn/alepay/api-partner:api-partner-v1.0.17
+  alepay-prod               api-payment-core                         2/2      2        hub.saobang.vn/alepay/api-payment-core:master-v1.0.138
+  alepay-prod               api-v1-service                           1/1      1        hub.saobang.vn/alepay/api-v1-service:master-v2.80
+  alepay-prod               callback-merchant                        1/1      1        hub.saobang.vn/alepay/callback-merchant:v1.58
+  alepay-prod               core-ops                                 2/2      2        hub.saobang.vn/alepay/alepayops2.0:master-v1.1.334
+  alepay-prod               core-ops-backup                          0/0      0        hub.saobang.vn/alepay/alepayops2.0:masterbackup-v1.0.55
+  alepay-prod               doi-soat-php                             1/1      1        hub.saobang.vn/alepay/doi-soat-php:v3.93
+  alepay-prod               static-alepay                            2/2      2        hub.saobang.vn/alepay/static-alepay:master-v1.66
+  argocd                    argocd-applicationset-controller         1/1      1        quay.io/argoproj/argocd:v2.7.8
+  argocd                    argocd-dex-server                        1/1      1        ghcr.io/dexidp/dex:v2.37.0
+  argocd                    argocd-redis                             1/1      1        public.ecr.aws/docker/library/redis:7.0.11-alpine
+  argocd                    argocd-repo-server                       1/1      1        quay.io/argoproj/argocd:v2.7.8
+  argocd                    argocd-server                            1/1      1        quay.io/argoproj/argocd:v2.7.8
+  cattle-fleet-system       fleet-controller                         1/1      1        rancher/fleet:v0.11.4, rancher/fleet:v0.11.4, rancher/fleet:v0.11.4
+  cattle-fleet-system       gitjob                                   1/1      1        rancher/fleet:v0.11.4
+  cattle-provisioning-capi-system capi-controller-manager                  1/1      1        rancher/mirrored-cluster-api-controller:v1.8.3
+  cattle-system             cattle-cluster-agent                     0/2      0        rancher/rancher-agent:v2.10.3
+  cattle-system             eks-config-operator                      1/1      1        rancher/eks-operator:v1.10.9
+  cattle-system             rancher                                  3/3      3        rancher/rancher:v2.10.3
+  cattle-system             rancher-webhook                          1/1      1        rancher/rancher-webhook:v0.6.4
+  cattle-system             system-upgrade-controller                1/1      1        rancher/system-upgrade-controller:v0.14.2
+  cert-manager              cert-manager                             1/1      1        quay.io/jetstack/cert-manager-controller:v1.17.1
+  cert-manager              cert-manager-cainjector                  1/1      1        quay.io/jetstack/cert-manager-cainjector:v1.17.1
+  cert-manager              cert-manager-webhook                     1/1      1        quay.io/jetstack/cert-manager-webhook:v1.17.1
+  default                   nginx-deployment                         1/1      1        nginx:latest
+  kube-system               coredns                                  2/2      2        602401143452.dkr.ecr.ap-southeast-1.amazonaws.com/eks/coredns:v1.10.1-eksbuild.1
+  kube-system               ebs-csi-controller                       2/2      2        602401143452.dkr.ecr.ap-southeast-1.amazonaws.com/eks/aws-ebs-csi-driver:v1.40.0, 602401143452.dkr.ecr.ap-southeast-1.amazonaws.com/eks/csi-provisioner:v5.2.0-eks-1-32-6, 602401143452.dkr.ecr.ap-southeast-1.amazonaws.com/eks/csi-attacher:v4.8.0-eks-1-32-6, 602401143452.dkr.ecr.ap-southeast-1.amazonaws.com/eks/csi-snapshotter:v8.2.0-eks-1-32-6, 602401143452.dkr.ecr.ap-southeast-1.amazonaws.com/eks/csi-resizer:v1.13.1-eks-1-32-6, 602401143452.dkr.ecr.ap-southeast-1.amazonaws.com/eks/livenessprobe:v2.14.0-eks-1-32-6
+  kube-system               efs-csi-controller                       2/2      2        602401143452.dkr.ecr.ap-southeast-1.amazonaws.com/eks/aws-efs-csi-driver:v2.1.6, 602401143452.dkr.ecr.ap-southeast-1.amazonaws.com/eks/csi-provisioner:v5.1.0-eks-1-31-5, 602401143452.dkr.ecr.ap-southeast-1.amazonaws.com/eks/livenessprobe:v2.14.0-eks-1-31-5
+  monitoring                kube-prometheus-stack-grafana            1/1      1        quay.io/kiwigrid/k8s-sidecar:1.30.10, quay.io/kiwigrid/k8s-sidecar:1.30.10, docker.io/grafana/grafana:12.3.0
+  monitoring                kube-prometheus-stack-kube-state-metrics 1/1      1        registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.17.0
+  monitoring                kube-prometheus-stack-operator           1/1      1        quay.io/prometheus-operator/prometheus-operator:v0.86.2
+  monitoring                loki-stack-loki-distributed-distributor  1/1      1        docker.io/grafana/loki:2.9.13
+  monitoring                loki-stack-loki-distributed-gateway      2/2      2        docker.io/nginxinc/nginx-unprivileged:1.20.2-alpine
+  monitoring                loki-stack-loki-distributed-query-frontend 1/1      1        docker.io/grafana/loki:2.9.13
+  monitoring                promtail                                 1/1      1        docker.io/grafana/promtail:2.9.2
+
+  ▸ StatefulSets
+
+  Total StatefulSets: 7
+
+  NAMESPACE                   NAME                                              READY   AGE
+  argocd                      argocd-application-controller                     1/1     3y12d
+  cattle-fleet-local-system   fleet-agent                                       1/1     204d
+  cattle-fleet-system         fleet-agent                                       0/1     352d
+  monitoring                  alertmanager-kube-prometheus-stack-alertmanager   1/1     259d
+  monitoring                  loki-stack-loki-distributed-ingester              1/1     2y197d
+  monitoring                  loki-stack-loki-distributed-querier               1/1     2y197d
+  monitoring                  prometheus-kube-prometheus-stack-prometheus       1/1     2y357d
+
+  ▸ DaemonSets
+
+  Total DaemonSets: 8
+
+  NAMESPACE       NAME                                             DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR              AGE
+  kube-system     aws-node                                         17        17        17      17           17          <none>                     3y14d
+  kube-system     ebs-csi-node                                     17        17        17      17           17          kubernetes.io/os=linux     2y2d
+  kube-system     ebs-csi-node-windows                             0         0         0       0            0           kubernetes.io/os=windows   2y2d
+  kube-system     efs-csi-node                                     17        17        17      17           17          kubernetes.io/os=linux     521d
+  kube-system     kube-proxy                                       17        17        17      17           17          <none>                     521d
+  monitoring      kube-prometheus-stack-prometheus-node-exporter   17        17        17      17           17          kubernetes.io/os=linux     521d
+  monitoring      promtail-nginx                                   6         6         6       6            6           <none>                     2y147d
+  nginx-ingress   ingress-nginx-controller                         17        17        17      17           17          kubernetes.io/os=linux     3y8d
+
+  ▸ CronJobs & Jobs
+
+  Total CronJobs: 2
+  Total Jobs    : 4
+
+  NAMESPACE             NAME                                 SCHEDULE    TIMEZONE   SUSPEND   ACTIVE   LAST SCHEDULE   AGE
+  cattle-fleet-system   fleet-cleanup-gitrepo-jobs           @daily      <none>     False     0        22h             512d
+  fleet-default         rke2-machineconfig-cleanup-cronjob   5 0 * * *   <none>     False     0        21h             512d
+
+  ▸ Services
+
+  Total Services: 72
+
+  NAMESPACE                         NAME                                                  TYPE           CLUSTER-IP       EXTERNAL-IP                                                                   PORT(S)                        AGE
+  alepay-prod                       alepay-admintool                                      ClusterIP      172.20.177.222   <none>                                                                        80/TCP                         2y342d
+  alepay-prod                       alepay-api-v3-service                                 ClusterIP      172.20.187.25    <none>                                                                        80/TCP                         2y344d
+  alepay-prod                       alepay-bi-report                                      ClusterIP      172.20.62.183    <none>                                                                        8080/TCP                       2y288d
+  alepay-prod                       alepay-checkout-v3-service                            ClusterIP      172.20.167.185   <none>                                                                        80/TCP                         2y343d
+  alepay-prod                       alepay-core-checkout-v3                               ClusterIP      172.20.44.199    <none>                                                                        8899/TCP,5556/TCP              2y356d
+  alepay-prod                       alepay-core-checkout-v3-nodeport                      NodePort       172.20.172.35    <none>                                                                        8899:31772/TCP                 2y356d
+  alepay-prod                       alepay-core-export                                    ClusterIP      172.20.197.158   <none>                                                                        8989/TCP,5556/TCP              2y245d
+  alepay-prod                       alepay-core-get-info                                  ClusterIP      172.20.83.72     <none>                                                                        8898/TCP,5556/TCP              2y224d
+  alepay-prod                       alepay-gateway                                        ClusterIP      172.20.73.24     <none>                                                                        8088/TCP                       2y344d
+  alepay-prod                       alepay-merchant-frontend-java                         ClusterIP      172.20.207.35    <none>                                                                        8080/TCP                       2y344d
+  alepay-prod                       alepay-merchant-v3                                    ClusterIP      172.20.26.64     <none>                                                                        80/TCP                         2y344d
+  alepay-prod                       alepay-pay-all-microform                              ClusterIP      172.20.234.214   <none>                                                                        80/TCP                         2y356d
+  alepay-prod                       alepay-payment-microform                              ClusterIP      172.20.227.224   <none>                                                                        80/TCP                         2y356d
+  alepay-prod                       alepay-provider                                       ClusterIP      172.20.203.86    <none>                                                                        80/TCP                         2y
+  alepay-prod                       alepay-schedule                                       ClusterIP      172.20.153.104   <none>                                                                        9909/TCP                       2y237d
+  alepay-prod                       alepay-token-microform                                ClusterIP      172.20.90.175    <none>                                                                        80/TCP                         2y356d
+  alepay-prod                       api-partner                                           ClusterIP      172.20.135.250   <none>                                                                        9909/TCP                       2y6d
+  alepay-prod                       api-payment-core                                      ClusterIP      172.20.133.70    <none>                                                                        9909/TCP,5556/TCP              2y356d
+  alepay-prod                       api-payment-core-nodeport                             NodePort       172.20.83.80     <none>                                                                        9909:30174/TCP                 2y356d
+  alepay-prod                       api-v1-service                                        ClusterIP      172.20.99.36     <none>                                                                        80/TCP                         2y356d
+  alepay-prod                       callback-merchant                                     ClusterIP      172.20.51.241    <none>                                                                        80/TCP                         2y120d
+  alepay-prod                       callback-merchant-crontab                             ClusterIP      172.20.178.170   <none>                                                                        9000/TCP                       2y120d
+  alepay-prod                       core-ops                                              ClusterIP      172.20.188.84    <none>                                                                        9999/TCP,5556/TCP              2y343d
+  alepay-prod                       core-ops-backup                                       ClusterIP      172.20.230.154   <none>                                                                        9999/TCP,5556/TCP              2y124d
+  alepay-prod                       doi-soat-php                                          ClusterIP      172.20.156.221   <none>                                                                        80/TCP                         2y356d
+  alepay-prod                       static-alepay                                         ClusterIP      172.20.239.20    <none>                                                                        80/TCP                         2y322d
+  argocd                            argocd-applicationset-controller                      ClusterIP      172.20.128.30    <none>                                                                        7000/TCP                       3y12d
+  argocd                            argocd-dex-server                                     ClusterIP      172.20.193.42    <none>                                                                        5556/TCP,5557/TCP              3y12d
+  argocd                            argocd-redis                                          ClusterIP      172.20.213.242   <none>                                                                        6379/TCP                       3y12d
+  argocd                            argocd-repo-server                                    ClusterIP      172.20.228.223   <none>                                                                        8081/TCP                       3y12d
+  argocd                            argocd-server                                         ClusterIP      172.20.217.76    <none>                                                                        80/TCP,443/TCP                 3y12d
+  cattle-fleet-local-system         fleet-agent                                           ClusterIP      None             <none>                                                                        <none>                         512d
+  cattle-fleet-system               fleet-agent                                           ClusterIP      None             <none>                                                                        <none>                         352d
+  cattle-fleet-system               gitjob                                                ClusterIP      172.20.251.169   <none>                                                                        80/TCP                         512d
+  cattle-fleet-system               monitoring-fleet-controller                           ClusterIP      172.20.241.178   <none>                                                                        8080/TCP                       512d
+  cattle-fleet-system               monitoring-gitjob                                     ClusterIP      172.20.89.30     <none>                                                                        8081/TCP                       512d
+  cattle-provisioning-capi-system   capi-webhook-service                                  ClusterIP      172.20.208.189   <none>                                                                        443/TCP                        512d
+  cattle-system                     cattle-cluster-agent                                  ClusterIP      172.20.34.122    <none>                                                                        80/TCP,443/TCP                 358d
+  cattle-system                     rancher                                               ClusterIP      172.20.244.77    <none>                                                                        80/TCP,443/TCP                 512d
+  cattle-system                     rancher-webhook                                       ClusterIP      172.20.73.165    <none>                                                                        443/TCP                        512d
+  cert-manager                      cert-manager                                          ClusterIP      172.20.89.8      <none>                                                                        9402/TCP                       512d
+  cert-manager                      cert-manager-cainjector                               ClusterIP      172.20.167.253   <none>                                                                        9402/TCP                       512d
+  cert-manager                      cert-manager-webhook                                  ClusterIP      172.20.249.189   <none>                                                                        443/TCP,9402/TCP               512d
+  default                           kubernetes                                            ClusterIP      172.20.0.1       <none>                                                                        443/TCP                        3y14d
+  default                           nginx-svc                                             ClusterIP      172.20.27.204    <none>                                                                        80/TCP                         129d
+  kube-system                       eks-extension-metrics-api                             ClusterIP      172.20.70.167    <none>                                                                        443/TCP                        621d
+  kube-system                       kube-dns                                              ClusterIP      172.20.0.10      <none>                                                                        53/UDP,53/TCP                  3y14d
+  kube-system                       kube-prometheus-stack-coredns                         ClusterIP      None             <none>                                                                        9153/TCP                       2y357d
+  kube-system                       kube-prometheus-stack-kube-controller-manager         ClusterIP      None             <none>                                                                        10257/TCP                      2y357d
+  kube-system                       kube-prometheus-stack-kube-etcd                       ClusterIP      None             <none>                                                                        2381/TCP                       2y357d
+  kube-system                       kube-prometheus-stack-kube-proxy                      ClusterIP      None             <none>                                                                        10249/TCP                      2y357d
+  kube-system                       kube-prometheus-stack-kube-scheduler                  ClusterIP      None             <none>                                                                        10259/TCP                      259d
+  kube-system                       kube-prometheus-stack-kubelet                         ClusterIP      None             <none>                                                                        10250/TCP,10255/TCP,4194/TCP   3y13d
+  monitoring                        alertmanager-operated                                 ClusterIP      None             <none>                                                                        9093/TCP,9094/TCP,9094/UDP     2y357d
+  monitoring                        kube-prometheus-stack-alertmanager                    ClusterIP      172.20.247.173   <none>                                                                        9093/TCP,8080/TCP              2y357d
+  monitoring                        kube-prometheus-stack-grafana                         ClusterIP      172.20.8.177     <none>                                                                        80/TCP                         2y313d
+  monitoring                        kube-prometheus-stack-kube-state-metrics              ClusterIP      172.20.168.6     <none>                                                                        8080/TCP                       2y313d
+  monitoring                        kube-prometheus-stack-operator                        ClusterIP      172.20.80.63     <none>                                                                        443/TCP                        2y357d
+  monitoring                        kube-prometheus-stack-prometheus                      ClusterIP      172.20.97.232    <none>                                                                        9090/TCP,8080/TCP              2y357d
+  monitoring                        kube-prometheus-stack-prometheus-node-exporter        ClusterIP      172.20.142.149   <none>                                                                        9100/TCP                       521d
+  monitoring                        loki-stack-loki-distributed-distributor               ClusterIP      172.20.47.22     <none>                                                                        3100/TCP,9095/TCP              2y197d
+  monitoring                        loki-stack-loki-distributed-gateway                   ClusterIP      172.20.33.140    <none>                                                                        80/TCP                         2y197d
+  monitoring                        loki-stack-loki-distributed-ingester                  ClusterIP      172.20.162.154   <none>                                                                        3100/TCP,9095/TCP              2y197d
+  monitoring                        loki-stack-loki-distributed-ingester-headless         ClusterIP      None             <none>                                                                        3100/TCP,9095/TCP              2y197d
+  monitoring                        loki-stack-loki-distributed-memberlist                ClusterIP      None             <none>                                                                        7946/TCP                       2y197d
+  monitoring                        loki-stack-loki-distributed-querier                   ClusterIP      172.20.195.235   <none>                                                                        3100/TCP,9095/TCP              2y197d
+  monitoring                        loki-stack-loki-distributed-querier-headless          ClusterIP      None             <none>                                                                        3100/TCP,9095/TCP              2y197d
+  monitoring                        loki-stack-loki-distributed-query-frontend            ClusterIP      172.20.106.201   <none>                                                                        3100/TCP,9095/TCP,9096/TCP     2y197d
+  monitoring                        loki-stack-loki-distributed-query-frontend-headless   ClusterIP      None             <none>                                                                        3100/TCP,9095/TCP,9096/TCP     2y197d
+  monitoring                        prometheus-operated                                   ClusterIP      None             <none>                                                                        9090/TCP                       2y357d
+  nginx-ingress                     ingress-nginx-controller                              LoadBalancer   172.20.198.89    ac315cb56769b4242b96bcbea26bb316-654502702.ap-southeast-1.elb.amazonaws.com   80:30828/TCP,443:30924/TCP     3y8d
+  nginx-ingress                     ingress-nginx-controller-admission                    ClusterIP      172.20.185.149   <none>                                                                        443/TCP                        3y8d
+
+  LoadBalancer services detected: 1
+
+  ▸ Ingresses
+
+  Total Ingresses: 21
+
+  NAMESPACE       NAME                                          CLASS   HOSTS                                                        ADDRESS                                                                       PORTS     AGE
+  alepay-prod     alepay-api-payment.nganluong.vn               nginx   alepay-api-payment.nganluong.vn                              ac315cb56769b4242b96bcbea26bb316-654502702.ap-southeast-1.elb.amazonaws.com   80, 443   2y343d
+  alepay-prod     alepay-gateway.nganluong.vn                   nginx   alepay-gateway.nganluong.vn                                  ac315cb56769b4242b96bcbea26bb316-654502702.ap-southeast-1.elb.amazonaws.com   80, 443   2y342d
+  alepay-prod     alepay-merchant.nganluong.vn                  nginx   alepay-merchant.nganluong.vn                                 ac315cb56769b4242b96bcbea26bb316-654502702.ap-southeast-1.elb.amazonaws.com   80, 443   2y344d
+  alepay-prod     alepay-ops-backup.nganluong.vn                nginx   alepay-ops-backup.nganluong.vn                               ac315cb56769b4242b96bcbea26bb316-654502702.ap-southeast-1.elb.amazonaws.com   80, 443   2y124d
+  alepay-prod     alepay-ops.nganluong.vn                       nginx   alepay-ops.nganluong.vn                                      ac315cb56769b4242b96bcbea26bb316-654502702.ap-southeast-1.elb.amazonaws.com   80, 443   2y344d
+  alepay-prod     alepay-v3-merchant.nganluong.vn               nginx   alepay-v3-merchant.nganluong.vn                              ac315cb56769b4242b96bcbea26bb316-654502702.ap-southeast-1.elb.amazonaws.com   80, 443   2y344d
+  alepay-prod     alepay-v3.nganluong.vn                        nginx   alepay-v3.nganluong.vn                                       ac315cb56769b4242b96bcbea26bb316-654502702.ap-southeast-1.elb.amazonaws.com   80, 443   2y344d
+  alepay-prod     alepay-v3.nganluong.vn-admintool              nginx   alepay-v3.nganluong.vn                                       ac315cb56769b4242b96bcbea26bb316-654502702.ap-southeast-1.elb.amazonaws.com   80, 443   2y329d
+  alepay-prod     alepay.nganluong.vn                           nginx   alepay.nganluong.vn                                          ac315cb56769b4242b96bcbea26bb316-654502702.ap-southeast-1.elb.amazonaws.com   80, 443   2y344d
+  alepay-prod     alepay.nganluong.vn-checkout-virtual-notify   nginx   alepay.nganluong.vn                                          ac315cb56769b4242b96bcbea26bb316-654502702.ap-southeast-1.elb.amazonaws.com   80, 443   44d
+  alepay-prod     alepay.vn                                     nginx   alepay.vn                                                    ac315cb56769b4242b96bcbea26bb316-654502702.ap-southeast-1.elb.amazonaws.com   80, 443   2y344d
+  alepay-prod     alepay.vn-appimage                            nginx   alepay.vn                                                    ac315cb56769b4242b96bcbea26bb316-654502702.ap-southeast-1.elb.amazonaws.com   80, 443   2y63d
+  alepay-prod     core-checkout.nganluong.vn                    nginx   core-checkout.nganluong.vn                                   ac315cb56769b4242b96bcbea26bb316-654502702.ap-southeast-1.elb.amazonaws.com   80, 443   2y233d
+  alepay-prod     crontab-alepay.nganluong.vn                   nginx   crontab-alepay.nganluong.vn                                  ac315cb56769b4242b96bcbea26bb316-654502702.ap-southeast-1.elb.amazonaws.com   80, 443   2y120d
+  alepay-prod     fptpay.nganluong.vn                           nginx   fptpay.nganluong.vn                                          ac315cb56769b4242b96bcbea26bb316-654502702.ap-southeast-1.elb.amazonaws.com   80, 443   2y217d
+  alepay-prod     report-alepay.nganluong.vn                    nginx   report-alepay.nganluong.vn                                   ac315cb56769b4242b96bcbea26bb316-654502702.ap-southeast-1.elb.amazonaws.com   80, 443   2y349d
+  alepay-prod     static-alepay.nganluong.vn                    nginx   static-alepay.nganluong.vn                                   ac315cb56769b4242b96bcbea26bb316-654502702.ap-southeast-1.elb.amazonaws.com   80, 443   2y322d
+  argocd          deploy-alepay.nganluong.vn                    nginx   deploy-alepay.nganluong.vn                                   ac315cb56769b4242b96bcbea26bb316-654502702.ap-southeast-1.elb.amazonaws.com   80, 443   2y349d
+  cattle-system   rancher-alepay.nganluong.vn                   nginx   rancher-alepay.nganluong.vn                                  ac315cb56769b4242b96bcbea26bb316-654502702.ap-southeast-1.elb.amazonaws.com   80        512d
+  monitoring      grafana-alepay.nganluong.vn                   nginx   grafana-alepay.nganluong.vn,grafana-alepay-dr.nganluong.vn   ac315cb56769b4242b96bcbea26bb316-654502702.ap-southeast-1.elb.amazonaws.com   80, 443   2y349d
+  monitoring      prometheus-alepay.nganluong.vn                nginx   prometheus-alepay.nganluong.vn                               ac315cb56769b4242b96bcbea26bb316-654502702.ap-southeast-1.elb.amazonaws.com   80, 443   2y349d
+
+  ▸ Persistent Volume Claims
+
+  Total PVCs: 28
+
+  NAMESPACE     NAME                                                                                                   STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
+  alepay-prod   alepay-admintool                                                                                       Bound    pvc-6c5f48f9-36ae-4ac1-aa94-9e9d6952704e   1Gi        RWX            efs-sc         <unset>                 2y342d
+  alepay-prod   alepay-bi-report                                                                                       Bound    pvc-2d394eb8-ca94-4406-96cd-c86c084d4906   1Gi        RWX            efs-sc         <unset>                 2y288d
+  alepay-prod   alepay-core-export                                                                                     Bound    pvc-a5e38797-7afb-4fa8-a4c6-d82b4f2f7a61   1Gi        RWX            efs-sc         <unset>                 2y245d
+  alepay-prod   alepay-gateway                                                                                         Bound    pvc-67c8453a-3d0b-4782-8022-3a9f25ec6cb3   1Gi        RWX            efs-sc         <unset>                 2y344d
+  alepay-prod   alepay-gateway-upload                                                                                  Bound    pvc-0f91b370-d5d5-4aef-a4fd-bbb9f74c2500   1Gi        RWX            efs-sc         <unset>                 477d
+  alepay-prod   alepay-merchant-frontend-java                                                                          Bound    pvc-383105ea-b619-48e3-a6d6-bc2c8c716a97   1Gi        RWX            efs-sc         <unset>                 2y344d
+  alepay-prod   alepay-provider                                                                                        Bound    pvc-918827e2-8495-4867-8c30-2cc70fdee8c4   1Gi        RWX            efs-sc         <unset>                 2y
+  alepay-prod   alepay-schedule                                                                                        Bound    pvc-ba1d2978-6b25-4eda-b354-f21b1cfa301b   1Gi        RWX            efs-sc         <unset>                 2y237d
+  alepay-prod   api-partner                                                                                            Bound    pvc-e2ac9f81-6ebf-45b7-9334-779ffbd2573e   1Gi        RWX            efs-sc         <unset>                 2y6d
+  alepay-prod   api-payment-core                                                                                       Bound    pvc-98f8f029-8c2e-4fcc-98af-0bcc18e31103   1Gi        RWX            efs-sc         <unset>                 2y356d
+  alepay-prod   api-v1-service                                                                                         Bound    pvc-21d65a21-2081-4168-b354-3d72978862f8   1Gi        RWX            efs-sc         <unset>                 2y356d
+  alepay-prod   api-v3-service                                                                                         Bound    pvc-684faca6-b3be-4b3a-ab2d-e47f1d61dcfa   1Gi        RWX            efs-sc         <unset>                 2y344d
+  alepay-prod   callback-merchant                                                                                      Bound    pvc-b843300a-93a8-4cee-b470-122e547a665d   2Gi        RWX            efs-sc         <unset>                 2y120d
+  alepay-prod   checkout-v3-service                                                                                    Bound    pvc-33aa9310-3a76-4cf5-b2f5-37f93251f156   1Gi        RWX            efs-sc         <unset>                 2y343d
+  alepay-prod   core-checkout-v3                                                                                       Bound    pvc-39abd027-14be-4d8b-9ead-d7422d2f32ca   1Gi        RWX            efs-sc         <unset>                 2y356d
+  alepay-prod   core-get-info                                                                                          Bound    pvc-8a4c043b-5f27-4042-bcf1-9ee8c23396ad   1Gi        RWX            efs-sc         <unset>                 2y224d
+  alepay-prod   core-ops                                                                                               Bound    pvc-f69d714e-8d95-4f8e-aade-0a00e11470e6   1Gi        RWX            efs-sc         <unset>                 2y343d
+  alepay-prod   core-ops-backup                                                                                        Bound    pvc-b95245b8-8830-4c1a-ad8f-2e185fe0abfa   1Gi        RWX            efs-sc         <unset>                 2y124d
+  alepay-prod   doi-soat-php                                                                                           Bound    pvc-c45f91da-8f48-4206-9b0a-b400d735f397   2Gi        RWX            efs-sc         <unset>                 2y356d
+  alepay-prod   merchant-v3                                                                                            Bound    pvc-dfb17804-b153-4621-8e63-334c58297de7   2Gi        RWX            efs-sc         <unset>                 2y344d
+  alepay-prod   pay-all-microform                                                                                      Bound    pvc-7392d97d-b730-4365-b088-8af1781f5b60   1Gi        RWX            efs-sc         <unset>                 2y356d
+  alepay-prod   payment-microform                                                                                      Bound    pvc-902006a4-344e-4262-99af-4ecead69d30e   1Gi        RWX            efs-sc         <unset>                 2y356d
+  alepay-prod   token-microform                                                                                        Bound    pvc-6d00ac63-135e-4065-b589-116cd36d3bee   1Gi        RWX            efs-sc         <unset>                 2y356d
+  default       my-pvc-test                                                                                            Bound    pvc-887e0c7c-5060-4b09-bdca-c916cca0377a   1Gi        RWX            efs-sc         <unset>                 158d
+  monitoring    alertmanager-kube-prometheus-stack-alertmanager-db-alertmanager-kube-prometheus-stack-alertmanager-0   Bound    pvc-0bc26fb0-2eef-492a-9333-f1a91fe3c6bc   10Gi       RWO            gp2            <unset>                 2y357d
+  monitoring    kube-prometheus-stack-grafana                                                                          Bound    pvc-40346ea5-0720-4d4c-a303-0205f6d93ded   10Gi       RWO            gp2            <unset>                 203d
+  monitoring    prometheus-prometheus-kube-prometheus-stack-prometheus-0                                               Bound    pvc-2e679454-983d-4a13-8b1c-161965496127   30Gi       RWO            gp2            <unset>                 2y357d
+  monitoring    promtail-positions-pvc                                                                                 Bound    pvc-a4a90fc9-8146-4957-aa96-463fabc6d64a   10Gi       RWO            gp2            <unset>                 176d
+
+  ▸ ArgoCD Applications
+
+  Total ArgoCD Applications: 29
+
+  NAMESPACE   NAME                            SYNC STATUS   HEALTH STATUS
+  argocd      admintool                       Synced        Healthy
+  argocd      alepay-api-partner              Synced        Healthy
+  argocd      alepay-bi-report                Synced        Healthy
+  argocd      alepay-core-export              Synced        Healthy
+  argocd      alepay-gateway                  Synced        Healthy
+  argocd      alepay-merchant-frontend-java   Synced        Healthy
+  argocd      alepay-provider                 Unknown       Healthy
+  argocd      alepay-schedule                 Synced        Healthy
+  argocd      api-payment-core                Synced        Healthy
+  argocd      api-v1-service                  Unknown       Healthy
+  argocd      api-v3-service                  Synced        Healthy
+  argocd      callback-merchant               Synced        Healthy
+  argocd      cert-nganluong                  OutOfSync     Healthy
+  argocd      checkout-v3-service             Unknown       Healthy
+  argocd      core-checkout-v3                Synced        Healthy
+  argocd      core-get-info                   Synced        Healthy
+  argocd      core-ops                        Unknown       Healthy
+  argocd      core-ops-backup                 Synced        Healthy
+  argocd      doi-soat-php                    Synced        Healthy
+  argocd      merchant-v3                     Synced        Healthy
+  argocd      nginx                           Synced        Healthy
+  argocd      nl-cde                          OutOfSync     Progressing
+  argocd      nl-noncde                       OutOfSync     Progressing
+  argocd      pay-all-microform               Unknown       Healthy
+  argocd      payment-microform               Synced        Healthy
+  argocd      promtail-nginx-log              OutOfSync     Healthy
+  argocd      static-alepay                   OutOfSync     Healthy
+  argocd      token-microform                 Synced        Healthy
+  argocd      user-argocd                     Synced        Healthy
+
+  ▸ Container Image Inventory
+
+  Unique Container Images: 65
+
+  COUNT  IMAGE
+  ─────  ──────────────────────────────────────────────────
+       19 602401143452.dkr.ecr.ap-southeast-1.amazonaws.com/eks/livenessprobe:v2.14.0-eks-1-32-6
+       19 602401143452.dkr.ecr.ap-southeast-1.amazonaws.com/eks/livenessprobe:v2.14.0-eks-1-31-5
+       19 602401143452.dkr.ecr.ap-southeast-1.amazonaws.com/eks/aws-efs-csi-driver:v2.1.6
+       19 602401143452.dkr.ecr.ap-southeast-1.amazonaws.com/eks/aws-ebs-csi-driver:v1.40.0
+       17 registry.k8s.io/ingress-nginx/controller:v1.8.1@sha256:e5c4824e7375fcf2a393e1c03c293b69759af37a9ca6abdb91b13d78a93da8bd
+       17 quay.io/prometheus/node-exporter:v1.10.2
+       17 602401143452.dkr.ecr.ap-southeast-1.amazonaws.com/eks/kube-proxy:v1.32.6-minimal-eksbuild.12
+       17 602401143452.dkr.ecr.ap-southeast-1.amazonaws.com/eks/csi-node-driver-registrar:v2.13.0-eks-1-32-6
+       17 602401143452.dkr.ecr.ap-southeast-1.amazonaws.com/eks/csi-node-driver-registrar:v2.12.0-eks-1-31-5
+       17 602401143452.dkr.ecr.ap-southeast-1.amazonaws.com/amazon-k8s-cni:v1.12.6-eksbuild.2
+        6 grafana/promtail
+        5 rancher/rancher-agent:v2.10.3
+        4 rancher/fleet:v0.11.4
+        4 rancher/fleet-agent:v0.11.4
+        4 quay.io/argoproj/argocd:v2.7.8
+        4 hub.saobang.vn/alepay/alepay-api-v3-service:master-master-v2.26
+        4 docker.io/grafana/loki:2.9.13
+        3 rancher/rancher:v2.10.3
+        3 hub.saobang.vn/alepay/core-get-info:master-v1.0.88
+        2 quay.io/prometheus-operator/prometheus-config-reloader:v0.60.1
+        2 quay.io/kiwigrid/k8s-sidecar:1.30.10
+        2 hub.saobang.vn/alepay/static-alepay:master-v1.66
+        2 hub.saobang.vn/alepay/api-payment-core:master-v1.0.138
+        2 hub.saobang.vn/alepay/alepayops2.0:master-v1.1.334
+        2 hub.saobang.vn/alepay/alepay-merchant-v3:master-v3.1.81
+        2 hub.saobang.vn/alepay/alepay-core-checkout-v3:master-v1.0.274
+        2 hub.saobang.vn/alepay/alepay-checkout-v3-service:master-v7.57
+        2 docker.io/nginxinc/nginx-unprivileged:1.20.2-alpine
+        2 602401143452.dkr.ecr.ap-southeast-1.amazonaws.com/eks/csi-snapshotter:v8.2.0-eks-1-32-6
+        2 602401143452.dkr.ecr.ap-southeast-1.amazonaws.com/eks/csi-resizer:v1.13.1-eks-1-32-6
+        2 602401143452.dkr.ecr.ap-southeast-1.amazonaws.com/eks/csi-provisioner:v5.2.0-eks-1-32-6
+        2 602401143452.dkr.ecr.ap-southeast-1.amazonaws.com/eks/csi-provisioner:v5.1.0-eks-1-31-5
+        2 602401143452.dkr.ecr.ap-southeast-1.amazonaws.com/eks/csi-attacher:v4.8.0-eks-1-32-6
+        2 602401143452.dkr.ecr.ap-southeast-1.amazonaws.com/eks/coredns:v1.10.1-eksbuild.1
+        1 registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.17.0
+        1 rancher/system-upgrade-controller:v0.14.2
+        1 rancher/rancher-webhook:v0.6.4
+        1 rancher/mirrored-cluster-api-controller:v1.8.3
+        1 rancher/eks-operator:v1.10.9
+        1 quay.io/prometheus/prometheus:v2.39.1
+        1 quay.io/prometheus-operator/prometheus-operator:v0.86.2
+        1 quay.io/prometheus/alertmanager:v0.29.0
+        1 quay.io/jetstack/cert-manager-webhook:v1.17.1
+        1 quay.io/jetstack/cert-manager-controller:v1.17.1
+        1 quay.io/jetstack/cert-manager-cainjector:v1.17.1
+        1 public.ecr.aws/docker/library/redis:7.0.11-alpine
+        1 nginx:latest
+        1 hub.saobang.vn/alepay/provider:v1.0.18
+        1 hub.saobang.vn/alepay/doi-soat-php:v3.93
+        1 hub.saobang.vn/alepay/callback-merchant:v1.58
+
+🔒 SECTION 5: SECURITY & BEST PRACTICES
+─────────────────────────────────────────────────────────────────
+
+  ▸ Pods without Resource Limits/Requests
+
+  Pods/Containers without limits: 109
+
+  NAMESPACE                 POD                                           CONTAINER
+  ───────────────────────── ───────────────────────────────────────────── ──────────────
+  alepay-prod               alepay-admintool-7bdbcffb67-8njl2             alepay-admintool
+  alepay-prod               alepay-api-v3-service-848bd8f486-4zwqg        alepay-api-v3-service
+  alepay-prod               alepay-api-v3-service-848bd8f486-77j77        alepay-api-v3-service
+  alepay-prod               alepay-api-v3-service-848bd8f486-n5d8k        alepay-api-v3-service
+  alepay-prod               alepay-api-v3-service-848bd8f486-vkcds        alepay-api-v3-service
+  alepay-prod               alepay-bi-report-6449d86769-nb5xs             alepay-bi-report
+  alepay-prod               alepay-checkout-v3-service-797dc7696d-w9zqm   alepay-checkout-v3-service
+  alepay-prod               alepay-checkout-v3-service-797dc7696d-zfb87   alepay-checkout-v3-service
+  alepay-prod               alepay-core-export-c6bffb885-86z7f            alepay-core-export
+  alepay-prod               alepay-gateway-5f8ff66fd-rcsn8                alepay-gateway
+  alepay-prod               alepay-merchant-frontend-java-647c9cc6fd-lv7dj alepay-merchant-frontend-java
+  alepay-prod               alepay-merchant-v3-57867467c9-qggwp           alepay-merchant-v3
+  alepay-prod               alepay-merchant-v3-57867467c9-zl6c8           alepay-merchant-v3
+  alepay-prod               alepay-pay-all-microform-6f87cc8dc-tbwmw      alepay-pay-all-microform
+  alepay-prod               alepay-payment-microform-757dcd55cc-jgzqr     alepay-payment-microform
+  alepay-prod               alepay-provider-64cdcf9b48-8k5v9              alepay-provider
+  alepay-prod               alepay-schedule-fbd69745b-qrjt8               alepay-schedule
+  alepay-prod               alepay-token-microform-786944cd67-hbpcm       alepay-token-microform
+  alepay-prod               api-v1-service-c798478c4-bw7lw                api-v1-service
+  alepay-prod               core-ops-564995994f-7xlcz                     core-ops
+  alepay-prod               core-ops-564995994f-nfd4w                     core-ops
+  alepay-prod               doi-soat-php-67d987f457-wqxcx                 doi-soat-php
+  alepay-prod               s3-pvc-archive-once-7xd7s                     aws-archive
+  alepay-prod               static-alepay-847597b596-4krmb                static-alepay
+  alepay-prod               static-alepay-847597b596-hzvd8                static-alepay
+  argocd                    argocd-application-controller-0               application-controller
+  argocd                    argocd-applicationset-controller-6589579b4d-vm7mn applicationset-controller
+  argocd                    argocd-dex-server-5c9444d98-xsbx9             dex-server
+  argocd                    argocd-redis-866c99c658-6zn9w                 redis
+  argocd                    argocd-repo-server-9c7d695b7-bbd67            repo-server
+  ... and 79 more
+
+  ▸ Pods without Health Checks
+
+  Pods/Containers without probes: 44
+
+  NAMESPACE                 POD                                           CONTAINER
+  ───────────────────────── ───────────────────────────────────────────── ──────────────
+  alepay-prod               alepay-admintool-7bdbcffb67-8njl2             alepay-admintool
+  alepay-prod               alepay-bi-report-6449d86769-nb5xs             alepay-bi-report
+  alepay-prod               alepay-core-export-c6bffb885-86z7f            alepay-core-export
+  alepay-prod               alepay-core-get-info-fcb7f956b-5lctl          alepay-core-get-info
+  alepay-prod               alepay-core-get-info-fcb7f956b-jsdlb          alepay-core-get-info
+  alepay-prod               alepay-core-get-info-fcb7f956b-xjh5h          alepay-core-get-info
+  alepay-prod               alepay-merchant-frontend-java-647c9cc6fd-lv7dj alepay-merchant-frontend-java
+  alepay-prod               alepay-provider-64cdcf9b48-8k5v9              alepay-provider
+  alepay-prod               alepay-schedule-fbd69745b-qrjt8               alepay-schedule
+  alepay-prod               api-partner-5bd976fb4-dk6xx                   api-partner
+  alepay-prod               callback-merchant-6d6d8b5775-n7fjh            callback-merchant
+  alepay-prod               s3-pvc-archive-once-7xd7s                     aws-archive
+  alepay-prod               static-alepay-847597b596-4krmb                static-alepay
+  alepay-prod               static-alepay-847597b596-hzvd8                static-alepay
+  argocd                    argocd-applicationset-controller-6589579b4d-vm7mn applicationset-controller
+  argocd                    argocd-dex-server-5c9444d98-xsbx9             dex-server
+  argocd                    argocd-redis-866c99c658-6zn9w                 redis
+  cattle-fleet-local-system fleet-agent-0                                 fleet-agent
+  cattle-fleet-local-system fleet-agent-0                                 fleet-agent-clusterstatus
+  cattle-fleet-system       fleet-agent-0                                 fleet-agent
+  ... and 24 more
+
+  ▸ Privileged Containers
+
+  Privileged containers: 53
+
+  - kube-system / ebs-csi-node-2bn9m / ebs-plugin
+  - kube-system / ebs-csi-node-59mrn / ebs-plugin
+  - kube-system / ebs-csi-node-6dg4d / ebs-plugin
+  - kube-system / ebs-csi-node-86jjt / ebs-plugin
+  - kube-system / ebs-csi-node-gl9pk / ebs-plugin
+  - kube-system / ebs-csi-node-k995c / ebs-plugin
+  - kube-system / ebs-csi-node-lfpwf / ebs-plugin
+  - kube-system / ebs-csi-node-mvmms / ebs-plugin
+  - kube-system / ebs-csi-node-n5gqd / ebs-plugin
+  - kube-system / ebs-csi-node-nqzgx / ebs-plugin
+  - kube-system / ebs-csi-node-sgzf2 / ebs-plugin
+  - kube-system / ebs-csi-node-sshfq / ebs-plugin
+  - kube-system / ebs-csi-node-tfcfq / ebs-plugin
+  - kube-system / ebs-csi-node-vhcpx / ebs-plugin
+  - kube-system / ebs-csi-node-vjmbg / ebs-plugin
+  - kube-system / ebs-csi-node-zbmzg / ebs-plugin
+  - kube-system / ebs-csi-node-zzxg2 / ebs-plugin
+  - kube-system / efs-csi-controller-7864d984b7-95rkb / efs-plugin
+  - kube-system / efs-csi-controller-7864d984b7-gl7tv / efs-plugin
+  - kube-system / efs-csi-node-2gb59 / efs-plugin
+  - kube-system / efs-csi-node-5mnh8 / efs-plugin
+  - kube-system / efs-csi-node-5wbr4 / efs-plugin
+  - kube-system / efs-csi-node-67mv9 / efs-plugin
+  - kube-system / efs-csi-node-ckk5x / efs-plugin
+  - kube-system / efs-csi-node-g4krn / efs-plugin
+  - kube-system / efs-csi-node-h64sj / efs-plugin
+  - kube-system / efs-csi-node-jppkt / efs-plugin
+  - kube-system / efs-csi-node-jpv4s / efs-plugin
+  - kube-system / efs-csi-node-kg8fm / efs-plugin
+  - kube-system / efs-csi-node-l8rct / efs-plugin
+  - kube-system / efs-csi-node-lg24b / efs-plugin
+  - kube-system / efs-csi-node-mb458 / efs-plugin
+  - kube-system / efs-csi-node-nh6ms / efs-plugin
+  - kube-system / efs-csi-node-nnxct / efs-plugin
+  - kube-system / efs-csi-node-sm9d5 / efs-plugin
+  - kube-system / efs-csi-node-wzx29 / efs-plugin
+  - kube-system / kube-proxy-2prrh / kube-proxy
+  - kube-system / kube-proxy-2tqrb / kube-proxy
+  - kube-system / kube-proxy-4nz7s / kube-proxy
+  - kube-system / kube-proxy-54492 / kube-proxy
+  - kube-system / kube-proxy-8jp2n / kube-proxy
+  - kube-system / kube-proxy-9l62z / kube-proxy
+  - kube-system / kube-proxy-b7l5v / kube-proxy
+  - kube-system / kube-proxy-gmtfm / kube-proxy
+  - kube-system / kube-proxy-hs5fj / kube-proxy
+  - kube-system / kube-proxy-lztnn / kube-proxy
+  - kube-system / kube-proxy-mscnj / kube-proxy
+  - kube-system / kube-proxy-p855s / kube-proxy
+  - kube-system / kube-proxy-pwq9k / kube-proxy
+  - kube-system / kube-proxy-scb6p / kube-proxy
+  - kube-system / kube-proxy-t4lr6 / kube-proxy
+  - kube-system / kube-proxy-v6w2m / kube-proxy
+  - kube-system / kube-proxy-z756b / kube-proxy
+
+  ▸ Containers Running as Root
+
+  Containers potentially running as root: 96
+
+  ▸ Network Policies
+
+  Total Network Policies: 3
+  NAMESPACE                         NAME                POD-SELECTOR   AGE
+  cattle-fleet-local-system         default-allow-all   <none>         512d
+  cattle-fleet-system               default-allow-all   <none>         352d
+  cattle-provisioning-capi-system   default-allow-all   <none>         512d
+
+  ▸ PodDisruptionBudgets
+
+  Total PDBs: 2
+
+  NAMESPACE     NAME                                  MIN AVAILABLE   MAX UNAVAILABLE   ALLOWED DISRUPTIONS   AGE
+  kube-system   ebs-csi-controller                    N/A             1                 1                     2y2d
+  monitoring    loki-stack-loki-distributed-gateway   N/A             1                 1                     521d
+
+  ▸ HorizontalPodAutoscalers
+
+  Total HPAs: 0
+0
+
+  ▸ Service Accounts with IAM Roles (IRSA)
+
+  Service Accounts with IRSA: 5
+
+  NAMESPACE            SERVICE ACCOUNT                IAM ROLE ARN
+  ──────────────────── ────────────────────────────── ────────────────────────────────────
+  alepay-prod          s3-backup-sa                   arn:aws:iam::347599856906:role/EKS-S3-Backup-Role
+  default              s3-backup-sa                   arn:aws:iam::347599856906:role/EKS-S3-Backup-Role
+  kube-system          ebs-csi-controller-sa          arn:aws:iam::347599856906:role/AmazonEKS_EBS_CSI_DriverRole_Alepay
+  kube-system          efs-csi-controller-sa          arn:aws:iam::347599856906:role/kube-efs-role-Ale-EKS-Cluster-ap-southeast-1
+  kube-system          efs-csi-node-sa                arn:aws:iam::347599856906:role/kube-efs-role-Ale-EKS-Cluster-ap-southeast-1
+
+  ▸ Deprecated API Versions
+
+  Checking for deprecated/removed API versions...
+
+  ⚠ extensions/v1beta1/Ingress: Removed in 1.22 → use networking.k8s.io/v1
+    Resources: / 
+  ⚠ networking.k8s.io/v1beta1/Ingress: Removed in 1.22 → use networking.k8s.io/v1
+    Resources: / 
+  ⚠ rbac.authorization.k8s.io/v1beta1/ClusterRole: Removed in 1.22 → use rbac.authorization.k8s.io/v1
+    Resources: / 
+  ⚠ rbac.authorization.k8s.io/v1beta1/ClusterRoleBinding: Removed in 1.22 → use rbac.authorization.k8s.io/v1
+    Resources: / 
+  ⚠ policy/v1beta1/PodDisruptionBudget: Removed in 1.25 → use policy/v1
+    Resources: / 
+  ⚠ batch/v1beta1/CronJob: Removed in 1.25 → use batch/v1
+    Resources: / 
+  ⚠ autoscaling/v2beta1/HorizontalPodAutoscaler: Removed in 1.26 → use autoscaling/v2
+    Resources: / 
+  ⚠ flowcontrol.apiserver.k8s.io/v1beta2/FlowSchema: Removed in 1.29 → use flowcontrol.apiserver.k8s.io/v1
+    Resources: / 
+  ⚠ flowcontrol.apiserver.k8s.io/v1beta3/FlowSchema: Removed in 1.32 → use flowcontrol.apiserver.k8s.io/v1
+    Resources: / 
+
+🔧 SECTION 6: UPGRADE & OPTIMIZATION SUGGESTIONS
+─────────────────────────────────────────────────────────────────
+
+  ╔═══════════════════════════════════════════════════════════╗
+  ║  Summary: 🔴 CRITICAL: 7  🟡 WARNING: 18  🟢 INFO: 8  ║
+  ╚═══════════════════════════════════════════════════════════╝
+
+  🔴 CRITICAL
+  ────────────────────────────────────────────────────────
+  ✗ Cluster version 1.32 is not the latest (latest: 1.34)
+    → Upgrade path (sequential): 1.32 → 1.33 → 1.34
+
+  ✗ Node group 'Ale-EKS-App-Priority' uses AL2 AMI type (AL2_x86_64) - UNSUPPORTED since Nov 2025
+    → Migrate to AL2023 (AL2023_x86_64_STANDARD). AL2 EKS AMI support ended Nov 26, 2025. AL2 OS EOL: Jun 30, 2026. Migration requires creating new node group with AL2023 AMI and draining old nodes. Key changes: cgroup v2, IMDSv2 enforced, nodeadm instead of bootstrap.sh.
+
+  ✗ Node group 'Ale-EKS-NG' uses AL2 AMI type (AL2_x86_64) - UNSUPPORTED since Nov 2025
+    → Migrate to AL2023 (AL2023_x86_64_STANDARD). AL2 EKS AMI support ended Nov 26, 2025. AL2 OS EOL: Jun 30, 2026. Migration requires creating new node group with AL2023 AMI and draining old nodes. Key changes: cgroup v2, IMDSv2 enforced, nodeadm instead of bootstrap.sh.
+
+  ✗ Node group 'Ale-Eks-App-BE' uses AL2 AMI type (AL2_x86_64) - UNSUPPORTED since Nov 2025
+    → Migrate to AL2023 (AL2023_x86_64_STANDARD). AL2 EKS AMI support ended Nov 26, 2025. AL2 OS EOL: Jun 30, 2026. Migration requires creating new node group with AL2023 AMI and draining old nodes. Key changes: cgroup v2, IMDSv2 enforced, nodeadm instead of bootstrap.sh.
+
+  ✗ Node group 'Ale-Eks-App-Core' uses AL2 AMI type (AL2_x86_64) - UNSUPPORTED since Nov 2025
+    → Migrate to AL2023 (AL2023_x86_64_STANDARD). AL2 EKS AMI support ended Nov 26, 2025. AL2 OS EOL: Jun 30, 2026. Migration requires creating new node group with AL2023 AMI and draining old nodes. Key changes: cgroup v2, IMDSv2 enforced, nodeadm instead of bootstrap.sh.
+
+  ✗ Node group 'Ale-Eks-App-Isolation' uses AL2 AMI type (AL2_x86_64) - UNSUPPORTED since Nov 2025
+    → Migrate to AL2023 (AL2023_x86_64_STANDARD). AL2 EKS AMI support ended Nov 26, 2025. AL2 OS EOL: Jun 30, 2026. Migration requires creating new node group with AL2023 AMI and draining old nodes. Key changes: cgroup v2, IMDSv2 enforced, nodeadm instead of bootstrap.sh.
+
+  ✗ Node group 'Ale-Eks-Prometheus-NG' uses AL2 AMI type (AL2_x86_64) - UNSUPPORTED since Nov 2025
+    → Migrate to AL2023 (AL2023_x86_64_STANDARD). AL2 EKS AMI support ended Nov 26, 2025. AL2 OS EOL: Jun 30, 2026. Migration requires creating new node group with AL2023 AMI and draining old nodes. Key changes: cgroup v2, IMDSv2 enforced, nodeadm instead of bootstrap.sh.
+
+
+  🟡 WARNING
+  ────────────────────────────────────────────────────────
+  ⚠ Cluster version 1.32 is in Extended Support (6x cost increase)
+    → Extended support ends: 2027-03-23. Consider upgrading to reduce costs.
+
+  ⚠ Control plane logging is not enabled
+    → Enable at least 'api', 'audit', and 'authenticator' logs for security and troubleshooting.
+
+  ⚠ Add-on 'aws-ebs-csi-driver' has an update available: v1.40.0-eksbuild.1 → v1.63.1-eksbuild.1
+    → Update via: aws eks update-addon --cluster-name Ale-EKS-Cluster --addon-name aws-ebs-csi-driver --addon-version v1.63.1-eksbuild.1
+
+  ⚠ Add-on 'aws-efs-csi-driver' has an update available: v2.1.6-eksbuild.1 → v3.4.1-eksbuild.1
+    → Update via: aws eks update-addon --cluster-name Ale-EKS-Cluster --addon-name aws-efs-csi-driver --addon-version v3.4.1-eksbuild.1
+
+  ⚠ Add-on 'kube-proxy' has an update available: v1.32.6-eksbuild.12 → v1.32.13-eksbuild.21
+    → Update via: aws eks update-addon --cluster-name Ale-EKS-Cluster --addon-name kube-proxy --addon-version v1.32.13-eksbuild.21
+
+  ⚠ 109 pod/container(s) running without resource limits
+    → Set resource requests and limits to prevent resource contention and enable HPA.
+
+  ⚠ 44 pod/container(s) running without liveness/readiness probes
+    → Add health checks to ensure Kubernetes can detect and restart unhealthy pods.
+
+  ⚠ 53 container(s) running in privileged mode
+    → Review if privileged mode is truly necessary. Use securityContext with minimal capabilities instead.
+
+  ⚠ 96 container(s) potentially running as root (non-kube-system)
+    → Set 'runAsNonRoot: true' and specify a non-root 'runAsUser' in securityContext.
+
+  ⚠ Deprecated API 'extensions/v1beta1' found for kind 'Ingress'
+    → Removed in 1.22 → use networking.k8s.io/v1. Resources: / 
+
+  ⚠ Deprecated API 'networking.k8s.io/v1beta1' found for kind 'Ingress'
+    → Removed in 1.22 → use networking.k8s.io/v1. Resources: / 
+
+  ⚠ Deprecated API 'rbac.authorization.k8s.io/v1beta1' found for kind 'ClusterRole'
+    → Removed in 1.22 → use rbac.authorization.k8s.io/v1. Resources: / 
+
+  ⚠ Deprecated API 'rbac.authorization.k8s.io/v1beta1' found for kind 'ClusterRoleBinding'
+    → Removed in 1.22 → use rbac.authorization.k8s.io/v1. Resources: / 
+
+  ⚠ Deprecated API 'policy/v1beta1' found for kind 'PodDisruptionBudget'
+    → Removed in 1.25 → use policy/v1. Resources: / 
+
+  ⚠ Deprecated API 'batch/v1beta1' found for kind 'CronJob'
+    → Removed in 1.25 → use batch/v1. Resources: / 
+
+  ⚠ Deprecated API 'autoscaling/v2beta1' found for kind 'HorizontalPodAutoscaler'
+    → Removed in 1.26 → use autoscaling/v2. Resources: / 
+
+  ⚠ Deprecated API 'flowcontrol.apiserver.k8s.io/v1beta2' found for kind 'FlowSchema'
+    → Removed in 1.29 → use flowcontrol.apiserver.k8s.io/v1. Resources: / 
+
+  ⚠ Deprecated API 'flowcontrol.apiserver.k8s.io/v1beta3' found for kind 'FlowSchema'
+    → Removed in 1.32 → use flowcontrol.apiserver.k8s.io/v1. Resources: / 
+
+
+  🟢 INFO
+  ────────────────────────────────────────────────────────
+  ℹ Secrets encryption with KMS is not configured
+    → Consider enabling envelope encryption for Kubernetes secrets.
+
+  ℹ Node group 'Ale-EKS-App-Priority' K8s version (1.32) will need upgrade after control plane upgrade
+    → After upgrading the control plane, update this node group to match.
+
+  ℹ Node group 'Ale-EKS-NG' K8s version (1.32) will need upgrade after control plane upgrade
+    → After upgrading the control plane, update this node group to match.
+
+  ℹ Node group 'Ale-Eks-App-BE' K8s version (1.32) will need upgrade after control plane upgrade
+    → After upgrading the control plane, update this node group to match.
+
+  ℹ Node group 'Ale-Eks-App-Core' K8s version (1.32) will need upgrade after control plane upgrade
+    → After upgrading the control plane, update this node group to match.
+
+  ℹ Node group 'Ale-Eks-App-Isolation' K8s version (1.32) will need upgrade after control plane upgrade
+    → After upgrading the control plane, update this node group to match.
+
+  ℹ Node group 'Ale-Eks-Prometheus-NG' K8s version (1.32) will need upgrade after control plane upgrade
+    → After upgrading the control plane, update this node group to match.
+
+  ℹ Node group 'Prometheus-NG' K8s version (1.32) will need upgrade after control plane upgrade
+    → After upgrading the control plane, update this node group to match.
+
+
+═══════════════════════════════════════════════════════════════
+   Report generated: 2026-08-07 22:01:12 UTC
+   Text report     : ./eks-report-Ale-EKS-Cluster-20260807_220112.txt
+   CSV report      : ./eks-report-Ale-EKS-Cluster-20260807_220112.csv
+   HTML report     : ./eks-report-Ale-EKS-Cluster-20260807_220112.html
+═══════════════════════════════════════════════════════════════
