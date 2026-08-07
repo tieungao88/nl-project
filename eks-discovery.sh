@@ -1925,19 +1925,19 @@ main() {
     report "   Script Version: $VERSION"
     report "═══════════════════════════════════════════════════════════════"
 
-    # Run all discovery modules
+    # Run all discovery modules (|| true ensures one module failure doesn't abort entire script)
     log "Starting cluster discovery..."
     echo ""
 
-    discover_cluster_info
-    discover_node_groups
-    discover_addons
-    discover_applications
-    discover_security
-    print_suggestions
+    discover_cluster_info || { log_warn "Module 1 (Cluster Info) encountered errors, continuing..."; }
+    discover_node_groups || { log_warn "Module 2 (Node Groups) encountered errors, continuing..."; }
+    discover_addons || { log_warn "Module 3 (Add-ons) encountered errors, continuing..."; }
+    discover_applications || { log_warn "Module 4 (Applications) encountered errors, continuing..."; }
+    discover_security || { log_warn "Module 5 (Security) encountered errors, continuing..."; }
+    print_suggestions || { log_warn "Module 6 (Suggestions) encountered errors, continuing..."; }
 
     # Generate HTML report
-    generate_html_report
+    generate_html_report || { log_warn "HTML report generation encountered errors"; }
 
     # Footer
     output ""
