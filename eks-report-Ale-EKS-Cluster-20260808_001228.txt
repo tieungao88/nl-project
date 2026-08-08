@@ -1,0 +1,59 @@
+═══════════════════════════════════════════════════════════════
+   EKS CLUSTER DISCOVERY & UPGRADE REPORT
+   Cluster: Ale-EKS-Cluster | Region: ap-southeast-1
+   Generated: 2026-08-08 00:12:28 UTC
+   Script Version: 1.2.0
+═══════════════════════════════════════════════════════════════
+
+📋 SECTION 1: CLUSTER OVERVIEW
+─────────────────────────────────────────────────────────────────
+  Cluster Name      : Ale-EKS-Cluster
+  Kubernetes Version: 1.32
+  Platform Version  : eks.50
+  Status            : ACTIVE
+  Support Status    : ⚠️  EXTENDED SUPPORT
+  Support Detail    : Extended support ends: 2027-03-23 (cost: $0.60/hr vs $0.10/hr)
+  Created At        : 2023-07-25T16:05:37.185000+00:00
+  Endpoint          : https://23BB0E70942A994D661269B574681A6E.gr7.ap-southeast-1.eks.amazonaws.com
+  Region            : ap-southeast-1
+
+  ▸ Networking
+  VPC ID            : vpc-024d6e1b698cb8267
+  Subnets           : subnet-0636fc2afd490380a, subnet-0aed1b1336c64b4a8
+  Security Groups   : N/A
+  Cluster SG        : sg-07793fc0a4a6203b5
+  Public Access     : true
+  Private Access    : true
+  Public Access CIDR: 14.177.239.192/32, 183.91.4.105/32, 54.254.153.61/32, 101.99.7.213/32, 13.214.0.79/32, 14.177.239.244/32, 103.109.32.8/32, 103.109.33.254/32, 101.99.7.132/32, 14.177.239.203/32
+
+  ▸ Control Plane Logging
+  Logging Enabled   : No
+
+  ▸ Encryption
+  Secrets Encryption: Not configured
+
+  ▸ Identity
+  OIDC Issuer       : https://oidc.eks.ap-southeast-1.amazonaws.com/id/23BB0E70942A994D661269B574681A6E
+  Auth Mode         : API_AND_CONFIG_MAP
+
+🖥️ SECTION 2: NODE GROUPS
+─────────────────────────────────────────────────────────────────
+
+  ▸ Managed Node Groups (AWS API)
+  Total Managed Node Groups: 7
+
+  ┌─ Node Group: Ale-EKS-App-Priority
+  │  Status         : ACTIVE
+  │  K8s Version    : 1.32
+  │  AMI Type       : AL2_x86_64
+  │  AMI Status     : ⛔ AL2 (UNSUPPORTED)
+  │  AMI Migrate To : AL2023_x86_64_STANDARD
+  │  AMI Release    : 1.32.9-20251209
+  │  Instance Types : t3a.xlarge
+  │  Capacity Type  : ON_DEMAND
+  │  Disk Size (GB) : 30
+  │  Scaling        : min=2, desired=3, max=4
+  │  Labels         : name=ale-eks-app-priority
+  │  Taints         : none
+  │  Subnets        : subnet-0636fc2afd490380a, subnet-0aed1b1336c64b4a8
+  └──────────────────────────────────────

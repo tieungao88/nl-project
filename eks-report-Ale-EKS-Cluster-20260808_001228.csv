@@ -1,0 +1,11 @@
+CATEGORY,ITEM,NAMESPACE,NAME,CURRENT_VALUE,RECOMMENDED_VALUE,STATUS,DETAIL
+"SUGGESTION","WARNING","Cluster version 1.32 is in Extended Support (6x cost increase)","Extended support ends: 2027-03-23. Consider upgrading to reduce costs.",,,,
+"CLUSTER","version","","Ale-EKS-Cluster","1.32","1.34","EXTENDED_SUPPORT","Extended support ends: 2027-03-23 (cost: $0.60/hr vs $0.10/hr)"
+"CLUSTER","platform","","Ale-EKS-Cluster","eks.50","","ACTIVE","Created: 2023-07-25T16:05:37.185000+00:00"
+"SUGGESTION","CRITICAL","Cluster version 1.32 is not the latest (latest: 1.34)","Upgrade path (sequential): 1.32 → 1.33 → 1.34",,,,
+"CLUSTER","endpoint_access","","Ale-EKS-Cluster","public=true, private=true","","","public_cidrs=14.177.239.192/32, 183.91.4.105/32, 54.254.153.61/32, 101.99.7.213/32, 13.214.0.79/32, 14.177.239.244/32, 103.109.32.8/32, 103.109.33.254/32, 101.99.7.132/32, 14.177.239.203/32"
+"SUGGESTION","WARNING","Control plane logging is not enabled","Enable at least 'api', 'audit', and 'authenticator' logs for security and troubleshooting.",,,,
+"SUGGESTION","INFO","Secrets encryption with KMS is not configured","Consider enabling envelope encryption for Kubernetes secrets.",,,,
+"SUGGESTION","CRITICAL","Node group 'Ale-EKS-App-Priority' uses AL2 AMI type (AL2_x86_64) - UNSUPPORTED since Nov 2025","Migrate to AL2023 (AL2023_x86_64_STANDARD). AL2 EKS AMI support ended Nov 26, 2025. AL2 OS EOL: Jun 30, 2026. Migration requires creating new node group with AL2023 AMI and draining old nodes. Key changes: cgroup v2, IMDSv2 enforced, nodeadm instead of bootstrap.sh.",,,,
+"NODE_GROUP","managed","","Ale-EKS-App-Priority","AL2_x86_64","AL2023_x86_64_STANDARD","ACTIVE","version=1.32, instances=t3a.xlarge, scaling=min:2/desired:3/max:4, capacity=ON_DEMAND, disk=30GB, release=1.32.9-20251209"
+"SUGGESTION","INFO","Node group 'Ale-EKS-App-Priority' K8s version (1.32) will need upgrade after control plane upgrade","After upgrading the control plane, update this node group to match.",,,,
