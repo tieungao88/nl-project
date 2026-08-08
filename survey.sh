@@ -32,11 +32,85 @@ while [[ $# -gt 0 ]]; do
 done
 [[ -z "$OUT" ]] && OUT="survey-ingress-nginx-$(date +%Y%m%d_%H%M%S).md"
 
-for t in kubectl jq; do
-  command -v "$t" >/dev/null || { echo "Thiếu công cụ: $t"; exit 1; }
-done
-HAS_AWS=false; command -v aws >/dev/null && HAS_AWS=true
+# ─────────────────────────────────────────────────────────────
+# PREFLIGHT — thiếu bất kỳ thứ gì là DỪNG.
+# Chạy nửa vời sẽ cho ra báo cáo có lỗ, mà lỗ thì khó thấy hơn là lỗi.
+# ─────────────────────────────────────────────────────────────
+PF_FAIL=0
+pf_ok()   { printf '  \033[0;32m✓\033[0m %-22s %s\n' "$1" "${2:-}" >&2; }
+pf_bad()  { printf '  \033[0;31m✗\033[0m %-22s %s\n' "$1" "$2" >&2; PF_FAIL=1; }
 
+echo "Kiểm tra công cụ và kết nối…" >&2
+
+# Binary bắt buộc — mỗi cái phục vụ một mục cụ thể của báo cáo
+check_bin() { # $1=tên, $2=dùng cho mục nào, $3=cách cài
+  if command -v "$1" >/dev/null 2>&1; then
+    pf_ok "$1" "$(command -v "$1")"
+  else
+    pf_bad "$1" "cần cho $2 — cài: $3"
+  fi
+}
+check_bin kubectl "toàn bộ báo cáo"        "CloudShell có sẵn"
+check_bin jq      "mọi phép lọc JSON"      "CloudShell có sẵn"
+check_bin aws     "mục 1 (ELB/ALB/WAF/SG)" "CloudShell có sẵn"
+check_bin openssl "mục 6.4 (hạn cert)"     "CloudShell có sẵn"
+check_bin base64  "mục 6.4 (giải mã cert)" "coreutils"
+check_bin helm    "mục 7.3, 7.4"           "xem README, cài vào ~/bin"
+
+# textutils — thiếu thì không crash mà cho ra số liệu SAI, nguy hiểm hơn lỗi
+MISSING_CORE=""
+for t in grep awk sed sort uniq tr wc cut head; do
+  command -v "$t" >/dev/null 2>&1 || MISSING_CORE="$MISSING_CORE $t"
+done
+if [[ -z "$MISSING_CORE" ]]; then pf_ok "textutils" "grep awk sed sort uniq tr wc cut head"
+else pf_bad "textutils" "thiếu:$MISSING_CORE — thiếu thì số liệu sai thầm lặng"; fi
+
+# Phải có ít nhất một cách phân giải DNS CHẠY ĐƯỢC (mục 1.6).
+# Không chỉ kiểm tra file tồn tại — CloudShell không có bind-utils, và một
+# binary có mặt vẫn có thể hỏng.
+RESOLVER=""
+for m in dig host nslookup getent python3; do
+  command -v "$m" >/dev/null 2>&1 || continue
+  case "$m" in
+    dig)      dig +short localhost A          >/dev/null 2>&1 && RESOLVER=dig ;;
+    host)     host -t A localhost             >/dev/null 2>&1 && RESOLVER=host ;;
+    nslookup) nslookup localhost              >/dev/null 2>&1 && RESOLVER=nslookup ;;
+    getent)   getent ahostsv4 localhost       >/dev/null 2>&1 && RESOLVER=getent ;;
+    python3)  python3 -c 'import socket; socket.gethostbyname("localhost")' >/dev/null 2>&1 && RESOLVER=python3 ;;
+  esac
+  [[ -n "$RESOLVER" ]] && break
+done
+if [[ -n "$RESOLVER" ]]; then pf_ok "DNS resolver" "dung $RESOLVER"
+else pf_bad "DNS resolver" "cần cho mục 1.6 — cài: sudo dnf install -y bind-utils"; fi
+
+# Kết nối thật, không chỉ có binary
+if kubectl cluster-info >/dev/null 2>&1; then
+  pf_ok "cluster" "$(kubectl config current-context 2>/dev/null)"
+else
+  pf_bad "cluster" "kubectl không tới được API server — kiểm tra kubeconfig"
+fi
+if command -v aws >/dev/null 2>&1; then
+  CALLER=$(aws sts get-caller-identity --query Arn --output text 2>/dev/null)
+  if [[ -n "$CALLER" ]]; then pf_ok "aws credential" "$CALLER"
+  else pf_bad "aws credential" "aws sts get-caller-identity thất bại"; fi
+fi
+
+# Đối tượng khảo sát có tồn tại không
+if kubectl -n "$NS" get ds "$REL"-controller >/dev/null 2>&1; then
+  pf_ok "daemonset" "$NS/$REL-controller"
+else
+  pf_bad "daemonset" "không thấy $NS/$REL-controller — chỉnh bằng -n / biến REL"
+fi
+
+if [[ "$PF_FAIL" -ne 0 ]]; then
+  echo "" >&2
+  echo "DỪNG: thiếu điều kiện ở trên. Báo cáo sẽ có lỗ nên không sinh file." >&2
+  echo "Khắc phục rồi chạy lại." >&2
+  exit 1
+fi
+echo "" >&2
+
+HAS_AWS=true
 : > "$OUT"
 say()   { printf '  %s\n' "$*" >&2; }
 md()    { printf '%s\n' "$*" >> "$OUT"; }
@@ -50,6 +124,29 @@ q()    { kubectl "$@" 2>/dev/null; }
 awsq() { if $HAS_AWS; then aws "$@" --region "$REGION" 2>/dev/null; fi; }
 jqs()  { local r; r=$(printf '%s' "$1" | jq -r "$2" 2>/dev/null); printf '%s' "${r:-?}"; }
 jqn()  { local r; r=$(printf '%s' "$1" | jq -r "$2" 2>/dev/null); printf '%s' "${r:-0}"; }
+
+
+# Phân giải hostname → điền vào biến toàn cục RESOLVE_OUT (mỗi IP một dòng).
+# KHÔNG in ra stdout: người gọi mà dùng $(resolve_ips ...) là tạo subshell, và
+# mọi biến gán bên trong sẽ mất — đúng lỗi đã gặp với RESOLVER_USED.
+# Phương thức đã được preflight chọn sẵn nên ở đây không phải dò lại.
+RESOLVE_OUT=""
+resolve_ips() {
+  local h="$1"
+  RESOLVE_OUT=""
+  [[ -z "$h" || "$h" == "?" ]] && return
+  case "$RESOLVER" in
+    dig)      RESOLVE_OUT=$(dig +short "$h" A 2>/dev/null | grep -E '^[0-9]+\.') ;;
+    host)     RESOLVE_OUT=$(host -t A "$h" 2>/dev/null | awk '/has address/{print $NF}') ;;
+    nslookup) RESOLVE_OUT=$(nslookup "$h" 2>/dev/null | awk '/^Address: /{print $2}' | grep -E '^[0-9]+\.') ;;
+    getent)   RESOLVE_OUT=$(getent ahostsv4 "$h" 2>/dev/null | awk '{print $1}' | sort -u) ;;
+    python3)  RESOLVE_OUT=$(python3 -c 'import socket,sys
+try: print("\n".join(sorted(set(socket.gethostbyname_ex(sys.argv[1])[2]))))
+except Exception: pass' "$h" 2>/dev/null) ;;
+  esac
+}
+# Tiện ích: trả về IP trên một dòng, cách nhau bởi dấu cách
+ips_of() { resolve_ips "$1"; printf '%s' "$(printf '%s' "$RESOLVE_OUT" | sort -u | tr '\n' ' ')"; }
 
 echo "Khảo sát ingress-nginx → $OUT" >&2; echo "" >&2
 
@@ -156,6 +253,36 @@ if $HAS_AWS; then
 fi
 
 # ═════════════════════════════════════════════════════════════
+say "3c/10 Phân giải DNS — domain đi qua đường nào…"
+DNS_TABLE=""; DNS_VERDICT="chưa xác định"
+ALB_DNS=$(printf '%s' "$ALB_LIST" | jq -r '.LoadBalancers[]? | select(.Type=="application") | .DNSName' 2>/dev/null | head -1)
+ALB_IPS=" $(ips_of "$ALB_DNS")"
+CLB_IPS=" $(ips_of "$LB_HOST")"
+n_alb=0; n_clb=0; n_other=0
+while IFS= read -r h; do
+  [[ -z "$h" ]] && continue
+  ips=$(ips_of "$h")
+  tag="❔ không phân giải được"
+  if [[ -n "${ips// /}" ]]; then
+    tag="❓ đích khác (CDN / proxy / IP tĩnh?)"; hit=""
+    for ip in $ips; do
+      if [[ "$ALB_IPS" == *" $ip "* ]]; then hit="alb"; break; fi
+      if [[ "$CLB_IPS" == *" $ip "* ]]; then hit="clb"; break; fi
+    done
+    case "$hit" in
+      alb) tag="✅ qua ALB (có WAF)"; ((n_alb++)) || true ;;
+      clb) tag="🔴 **thẳng vào CLB — bỏ qua WAF**"; ((n_clb++)) || true ;;
+      *)   ((n_other++)) || true ;;
+    esac
+  fi
+  DNS_TABLE+="| \`$h\` | \`${ips:-—}\` | $tag |"$'\n'
+done < <(printf '%s' "$ING_JSON" | jq -r '[.items[]?.spec.rules[]?.host] | unique | .[]' 2>/dev/null)
+if   [[ "$n_clb" -gt 0 ]]; then DNS_VERDICT="🔴 **$n_clb domain trỏ thẳng CLB** — traffic của chúng không qua WAF"
+elif [[ "$n_alb" -gt 0 && "$n_other" -eq 0 ]]; then DNS_VERDICT="✅ tất cả $n_alb domain đi qua ALB"
+elif [[ "$n_alb" -gt 0 ]]; then DNS_VERDICT="$n_alb domain qua ALB, $n_other domain trỏ đích khác — xem mục 1.6"
+fi
+
+# ═════════════════════════════════════════════════════════════
 say "4/10  Đọc nginx.conf đã render…"
 NGINX_REALIP=""; REALIP_RECURSIVE="?"
 if [[ "$ALLOW_EXEC" == true ]]; then
@@ -198,6 +325,7 @@ md "| CLB scheme | \`$LB_SCHEME\` |"
 md "| CLB security group | \`${CLB_SGS:-?}\` |"
 md "| \`real_ip_recursive\` | $REALIP_RECURSIVE |"
 md "| externalTrafficPolicy | \`$ETP\` |"
+md "| **Domain đi qua đường nào?** | $DNS_VERDICT |"
 md ""
 md "> **Vì sao quan trọng:** chuỗi thiết kế là Client → ALB (WAF) → CLB → NodePort → nginx."
 md "> ALB *append* \`X-Forwarded-For\` nên client không spoof được qua đường đó."
@@ -285,22 +413,22 @@ md ""
 block text "$TG_DETAIL"
 md "#### Định nghĩa target group"
 block json "$(printf '%s' "$TG_JSON" | jq -r '[.TargetGroups[]? | {Name:.TargetGroupName, TargetType, Port, Protocol, VpcId, HealthCheck:{Interval:.HealthCheckIntervalSeconds, Timeout:.HealthCheckTimeoutSeconds, Healthy:.HealthyThresholdCount, Unhealthy:.UnhealthyThresholdCount, Path:.HealthCheckPath}, AttachedTo:.LoadBalancerArns}]' 2>/dev/null)"
-md "### 1.6 DNS thực tế của các domain"
+md "### 1.6 DNS thực tế — domain đi qua đường nào"
 md ""
-md "Cho biết client vào qua ALB, qua CDN, hay thẳng vào CLB."
+md "Đối chiếu IP của từng domain với IP của ALB và của Classic ELB. Domain nào trỏ"
+md "thẳng CLB là traffic của nó **không đi qua WAF**."
 md ""
-DNSOUT=""
-if command -v dig >/dev/null; then
-  while IFS= read -r h; do
-    [[ -z "$h" ]] && continue
-    DNSOUT+="$h"$'\n'"    $(dig +short "$h" 2>/dev/null | tr '\n' ' ')"$'\n'
-  done < <(printf '%s' "$ING_JSON" | jq -r '[.items[]?.spec.rules[]?.host] | unique | .[]' 2>/dev/null | head -12)
-elif command -v nslookup >/dev/null; then
-  DNSOUT=$(nslookup "$(printf '%s' "$ING_JSON" | jq -r '[.items[]?.spec.rules[]?.host]|unique|.[0]' 2>/dev/null)" 2>/dev/null)
-else
-  DNSOUT="(không có dig/nslookup)"
-fi
-block text "$DNSOUT"
+md "- Công cụ phân giải dùng: \`$RESOLVER\`"
+md "- ALB \`${ALB_DNS:-?}\` →\`$ALB_IPS\`"
+md "- CLB \`${LB_HOST:-?}\` →\`$CLB_IPS\`"
+md ""
+md "$DNS_VERDICT"
+md ""
+md "| Domain | IP phân giải | Đường đi |"
+md "|---|---|---|"
+if [[ -n "${DNS_TABLE//[[:space:]]/}" ]]; then printf '%s' "$DNS_TABLE" >> "$OUT"
+else md "| *(không phân giải được domain nào)* | | |"; fi
+md ""
 md "### 1.7 Service \`$REL-controller\`"
 block json "$(printf '%s' "$SVC_JSON" | jq -r '{type:.spec.type, externalTrafficPolicy:.spec.externalTrafficPolicy, ports:.spec.ports, annotations:.metadata.annotations, loadBalancer:.status.loadBalancer}' 2>/dev/null)"
 md "### 1.8 Cổng trên DaemonSet"
