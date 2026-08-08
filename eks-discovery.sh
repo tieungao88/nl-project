@@ -39,6 +39,7 @@ REPORT_FILE=""
 CSV_FILE=""
 HTML_FILE=""
 REPORT_DIR="."
+CHECK_CHARTS=false
 
 # Counters for summary
 CRITICAL_COUNT=0
@@ -93,12 +94,19 @@ Required:
   -r, --region     AWS region (e.g., ap-southeast-1)
 
 Options:
-  -o, --output     Output directory for report files (default: current dir)
-  -h, --help       Show this help message
+  -o, --output       Output directory for report files (default: current dir)
+  -C, --check-charts Compare installed Helm charts against upstream releases.
+                     OFF by default: this is the only part of the script that
+                     talks to anything other than the AWS API and the cluster.
+                     It sends chart names to artifacthub.io over HTTPS - no
+                     cluster data, no identifiers, no credentials - and needs
+                     curl plus outbound internet access.
+  -h, --help         Show this help message
 
 Examples:
   ${SCRIPT_NAME} -c my-cluster -r ap-southeast-1
   ${SCRIPT_NAME} -c my-cluster -r ap-southeast-1 -o /tmp/reports
+  ${SCRIPT_NAME} -c my-cluster -r ap-southeast-1 --check-charts
 
 Output Files:
   - eks-report-<cluster>-<timestamp>.txt  (Text report)
@@ -203,6 +211,57 @@ major_minor() {
     echo "$v" | cut -d'.' -f1,2
 }
 
+# ── Helm chart currency lookup (opt-in, --check-charts) ──────────────────────
+#
+# NOTE ON NETWORK ACCESS: everything else in this script talks only to the AWS
+# API and the cluster. These two functions are the sole exception - they make
+# outbound HTTPS GETs to artifacthub.io. Only a chart name is sent; no cluster
+# data, no identifiers, no credentials. That is why it is behind a flag and off
+# by default: the no-egress property of the default run is worth preserving.
+
+# Map a chart name to its Artifact Hub "<repo>/<package>" coordinates.
+# Vendor-distributed charts (Rancher's 105.x line, in-house charts) return
+# empty - there is no upstream release stream to compare them against.
+chart_to_artifacthub() {
+    case "$1" in
+        ingress-nginx)                echo "ingress-nginx/ingress-nginx" ;;
+        argo-cd)                      echo "argo/argo-cd" ;;
+        argo-workflows)               echo "argo/argo-workflows" ;;
+        argo-rollouts)                echo "argo/argo-rollouts" ;;
+        cert-manager)                 echo "cert-manager/cert-manager" ;;
+        kube-prometheus-stack)        echo "prometheus-community/kube-prometheus-stack" ;;
+        prometheus)                   echo "prometheus-community/prometheus" ;;
+        loki)                         echo "grafana/loki" ;;
+        loki-distributed)             echo "grafana/loki-distributed" ;;
+        loki-stack)                   echo "grafana/loki-stack" ;;
+        promtail)                     echo "grafana/promtail" ;;
+        grafana)                      echo "grafana/grafana" ;;
+        alloy)                        echo "grafana/alloy" ;;
+        metrics-server)               echo "metrics-server/metrics-server" ;;
+        aws-load-balancer-controller) echo "aws/aws-load-balancer-controller" ;;
+        external-dns)                 echo "external-dns/external-dns" ;;
+        cluster-autoscaler)           echo "autoscaler/cluster-autoscaler" ;;
+        velero)                       echo "vmware-tanzu/velero" ;;
+        external-secrets)             echo "external-secrets/external-secrets" ;;
+        sealed-secrets)               echo "sealed-secrets/sealed-secrets" ;;
+        keda)                         echo "kedacore/keda" ;;
+        *)                            echo "" ;;
+    esac
+}
+
+# Latest chart version, its app version, and whether upstream has marked the
+# chart deprecated - as a TSV triple. Empty on any failure (offline, rate
+# limited, package renamed); the caller degrades to "-".
+#
+# The deprecated flag matters as much as the version: a chart frozen at its
+# final release reports as "up to date" while actually being abandoned.
+artifacthub_latest() {
+    local pkg="$1"
+    curl -fsS --max-time 10 -H 'Accept: application/json' \
+        "https://artifacthub.io/api/v1/packages/helm/${pkg}" 2>/dev/null \
+        | jq -r '[(.version // ""), (.app_version // ""), ((.deprecated // false) | tostring)] | @tsv' 2>/dev/null || echo ""
+}
+
 # Convert date to epoch for comparison (cross-platform)
 date_to_epoch() {
     local d="$1"
@@ -230,6 +289,7 @@ parse_args() {
             -c|--cluster) CLUSTER_NAME="$2"; shift 2 ;;
             -r|--region)  REGION="$2"; shift 2 ;;
             -o|--output)  REPORT_DIR="$2"; shift 2 ;;
+            -C|--check-charts) CHECK_CHARTS=true; shift ;;
             -h|--help)    usage ;;
             *) log_error "Unknown option: $1"; usage ;;
         esac
@@ -277,6 +337,21 @@ preflight_checks() {
     else
         HAS_HELM=false
         log_warn "Optional tool: helm (not found - Helm release discovery will be skipped)"
+    fi
+
+    # --check-charts is the only feature that reaches outside AWS/the cluster.
+    # Say so plainly at start-up rather than surprising anyone reading logs.
+    if [[ "$CHECK_CHARTS" == true ]]; then
+        if ! command -v curl &>/dev/null; then
+            log_warn "--check-charts requested but curl not found - chart currency check disabled"
+            CHECK_CHARTS=false
+        elif [[ "$HAS_HELM" != true ]]; then
+            log_warn "--check-charts requested but helm not found - nothing to compare, check disabled"
+            CHECK_CHARTS=false
+        else
+            log_warn "--check-charts enabled: will send chart names to artifacthub.io over HTTPS"
+            log_warn "  (no cluster data, identifiers or credentials leave this machine)"
+        fi
     fi
 
     # Verify kubectl connectivity
@@ -1209,14 +1284,93 @@ discover_applications() {
         local helm_count
         helm_count=$(echo "$helm_output" | jq -r 'length' 2>/dev/null || echo "0")
         output "  Total Helm Releases: $helm_count"
+
+        if [[ "$CHECK_CHARTS" == true ]]; then
+            output "  Chart currency check: ${CYAN}enabled${NC} (queries artifacthub.io)"
+        else
+            output "  Chart currency check: disabled (re-run with --check-charts to compare against upstream)"
+        fi
+
         if [[ "$helm_count" -gt 0 ]]; then
             output ""
-            printf "  %-25s %-30s %-15s %-12s %s\n" "NAMESPACE" "NAME" "CHART" "APP VERSION" "STATUS" | tee -a "$REPORT_FILE"
-            printf "  %-25s %-30s %-15s %-12s %s\n" "─────────────────────────" "──────────────────────────────" "───────────────" "────────────" "──────" | tee -a "$REPORT_FILE"
-            echo "$helm_output" | jq -r '.[]? | [.namespace, .name, .chart, .app_version, .status] | @tsv' 2>/dev/null | sort | while IFS=$'\t' read -r ns name chart appver status; do
-                printf "  %-25s %-30s %-15s %-12s %s\n" "$ns" "$name" "$chart" "$appver" "$status" | tee -a "$REPORT_FILE"
-                csv_row "\"HELM\"" "\"helm_release\"" "\"$ns\"" "\"$name\"" "\"$chart\"" "\"\"" "\"$status\"" "\"app_version=$appver\""
-            done
+            printf "  %-27s %-26s %-34s %-13s %-15s %s\n" "NAMESPACE" "NAME" "CHART" "APP VERSION" "STATUS" "LATEST CHART" | tee -a "$REPORT_FILE"
+            printf "  %-27s %-26s %-34s %-13s %-15s %s\n" "───────────────────────────" "──────────────────────────" "──────────────────────────────────" "─────────────" "───────────────" "────────────" | tee -a "$REPORT_FILE"
+
+            local stuck_releases=()
+            while IFS=$'\t' read -r ns name chart appver status; do
+                [[ -z "$ns" ]] && continue
+
+                # Split "ingress-nginx-4.7.1" into chart name + chart version.
+                # Handles v-prefixes and build metadata: "cert-manager-v1.17.1",
+                # "fleet-crd-105.0.4+up0.11.4".
+                local chart_name chart_ver
+                chart_name=$(echo "$chart" | sed -E 's/-(v?[0-9]+\.[0-9]+.*)$//')
+                chart_ver=$(echo "$chart" | sed -E 's/^.*-(v?[0-9]+\.[0-9]+.*)$/\1/')
+                [[ "$chart_ver" == "$chart" ]] && chart_ver=""
+
+                # A release that is not "deployed" is mid-failure: a stuck
+                # pending-upgrade blocks every later helm operation on it.
+                if [[ "$status" != "deployed" ]]; then
+                    stuck_releases+=("$ns/$name ($status)")
+                fi
+
+                # Keep a colourless twin of the status cell: the colour codes are
+                # literal "\033..." strings here, so stripping them after the
+                # fact would not work for the report file.
+                local latest_chart="" latest_app="" chart_deprecated=""
+                local latest_display="-" latest_plain="-"
+                if [[ "$CHECK_CHARTS" == true && -n "$chart_ver" ]]; then
+                    local ah_pkg
+                    ah_pkg=$(chart_to_artifacthub "$chart_name")
+                    if [[ -n "$ah_pkg" ]]; then
+                        IFS=$'\t' read -r latest_chart latest_app chart_deprecated <<< "$(artifacthub_latest "$ah_pkg")"
+                        if [[ -z "$latest_chart" ]]; then
+                            latest_display="(lookup failed)"; latest_plain="(lookup failed)"
+                        elif [[ "$chart_deprecated" == "true" ]]; then
+                            # Deprecated wins over "N versions behind": a frozen
+                            # chart can even read as up-to-date, and telling
+                            # someone to upgrade to a dead chart is wrong advice.
+                            latest_display="${RED}DEPRECATED${NC}"; latest_plain="DEPRECATED"
+                            add_suggestion "WARNING" \
+                                "Helm chart '$chart_name' (release '$name' in $ns) is marked DEPRECATED upstream" \
+                                "No further releases will be published - this needs migrating to a replacement chart, not upgrading. Last published: chart $latest_chart (app ${latest_app:-unknown}), currently on chart $chart_ver (app ${appver:-unknown})."
+                        else
+                            local cur_mm new_mm
+                            cur_mm=$(major_minor "$(normalize_component_version "$chart_ver")")
+                            new_mm=$(major_minor "$(normalize_component_version "$latest_chart")")
+
+                            if [[ "$(normalize_component_version "$chart_ver")" == "$(normalize_component_version "$latest_chart")" ]]; then
+                                latest_display="${GREEN}current${NC}"; latest_plain="current"
+                            elif [[ "$cur_mm" != "$new_mm" ]]; then
+                                latest_display="${YELLOW}${latest_chart}${NC}"; latest_plain="$latest_chart"
+                                add_suggestion "WARNING" \
+                                    "Helm release '$name' ($ns) is on an outdated chart: $chart_name $chart_ver → $latest_chart" \
+                                    "App version ${appver:-unknown} → ${latest_app:-unknown}. Upgrade: helm repo update && helm upgrade $name <repo>/$chart_name --version <target> -n $ns. Back up first: helm get values $name -n $ns -o yaml"
+                            else
+                                latest_display="${CYAN}${latest_chart}${NC}"; latest_plain="$latest_chart"
+                                add_suggestion "INFO" \
+                                    "Helm release '$name' ($ns) is a patch release behind: $chart_name $chart_ver → $latest_chart" \
+                                    "App version ${appver:-unknown} → ${latest_app:-unknown}."
+                            fi
+                        fi
+                    else
+                        # Vendor-specific charts (Rancher's 105.x line, etc.) have
+                        # no meaningful upstream to compare against.
+                        latest_display="(no upstream)"; latest_plain="(no upstream)"
+                    fi
+                fi
+
+                printf "  %-27s %-26s %-34s %-13s %-15s %b\n" "$ns" "$name" "$chart" "$appver" "$status" "$latest_display"
+                printf "  %-27s %-26s %-34s %-13s %-15s %s\n" "$ns" "$name" "$chart" "$appver" "$status" "$latest_plain" >> "$REPORT_FILE"
+
+                csv_row "\"HELM\"" "\"helm_release\"" "\"$ns\"" "\"$name\"" "\"$chart\"" "\"$latest_chart\"" "\"$status\"" "\"app_version=$appver, latest_app=$latest_app\""
+            done < <(echo "$helm_output" | jq -r '.[]? | [.namespace, .name, .chart, .app_version, .status] | @tsv' 2>/dev/null | sort)
+
+            if [[ ${#stuck_releases[@]} -gt 0 ]]; then
+                add_suggestion "WARNING" \
+                    "${#stuck_releases[@]} Helm release(s) are not in 'deployed' state" \
+                    "A release stuck in pending-upgrade/pending-rollback/failed blocks all further helm operations on it until resolved (helm rollback, or delete the stuck revision secret). Releases: ${stuck_releases[*]}"
+            fi
         fi
     fi
 
