@@ -125,6 +125,30 @@ awsq() { if $HAS_AWS; then aws "$@" --region "$REGION" 2>/dev/null; fi; }
 jqs()  { local r; r=$(printf '%s' "$1" | jq -r "$2" 2>/dev/null); printf '%s' "${r:-?}"; }
 jqn()  { local r; r=$(printf '%s' "$1" | jq -r "$2" 2>/dev/null); printf '%s' "${r:-0}"; }
 
+# Ngày bắt đầu cho CloudWatch, chạy được trên cả GNU date lẫn BSD date
+days_ago() { date -u -d "$1 days ago" +%Y-%m-%dT%H:%M:%S 2>/dev/null || date -u -v-"$1"d +%Y-%m-%dT%H:%M:%S; }
+
+# Tổng một metric CloudWatch trong N ngày. Trả 0 nếu không có datapoint.
+# $1=namespace $2=metric $3=tên-dimension $4=giá-trị-dimension $5=số-ngày
+cw_sum() {
+  local r
+  r=$(awsq cloudwatch get-metric-statistics \
+        --namespace "$1" --metric-name "$2" \
+        --dimensions Name="$3",Value="$4" \
+        --start-time "$(days_ago "$5")" --end-time "$(date -u +%Y-%m-%dT%H:%M:%S)" \
+        --period 86400 --statistics Sum --output json 2>/dev/null \
+      | jq -r '[.Datapoints[]?.Sum] | add // 0 | floor' 2>/dev/null)
+  printf '%s' "${r:-0}"
+}
+# Số lớn cho dễ đọc: 1234567 → 1.2M
+human() {
+  local n="${1:-0}"
+  if   [[ "$n" -ge 1000000000 ]]; then printf '%s' "$(( n / 1000000000 )).$(( (n / 100000000) % 10 ))B"
+  elif [[ "$n" -ge 1000000 ]];    then printf '%s' "$(( n / 1000000 )).$(( (n / 100000) % 10 ))M"
+  elif [[ "$n" -ge 1000 ]];       then printf '%s' "$(( n / 1000 )).$(( (n / 100) % 10 ))K"
+  else printf '%s' "$n"; fi
+}
+
 
 # Phân giải hostname → điền vào biến toàn cục RESOLVE_OUT (mỗi IP một dòng).
 # KHÔNG in ra stdout: người gọi mà dùng $(resolve_ips ...) là tạo subshell, và
@@ -207,6 +231,57 @@ if [[ -n "${CLB_SGS// /}" && "$CLB_SGS" != "?" ]] && $HAS_AWS; then
 fi
 
 # ═════════════════════════════════════════════════════════════
+# Toàn bộ load balancer trong region — không chỉ cái gắn với ingress Service.
+# Mỗi CLB public còn sót là một cửa vào bỏ qua ALB/WAF.
+say "2b/10 Liệt kê TẤT CẢ load balancer + đo traffic…"
+CW_DAYS=${CW_DAYS:-14}
+ALL_CLB_JSON=""; LB_OVERVIEW=""; LB_DETAIL=""; N_CLB_OPEN=0; N_CLB_TOTAL=0
+if $HAS_AWS; then
+  ALL_CLB_JSON=$(awsq elb describe-load-balancers --output json)
+  N_CLB_TOTAL=$(jqn "$ALL_CLB_JSON" '[.LoadBalancerDescriptions[]?] | length')
+
+  while IFS=$'\t' read -r name dns scheme sgs nlisten ninst; do
+    [[ -z "$name" ]] && continue
+
+    # SG có mở ra Internet không
+    open="—"; sgdetail=""
+    if [[ -n "${sgs// /}" && "$sgs" != "null" ]]; then
+      sgjson=$(awsq ec2 describe-security-groups --group-ids $sgs --output json)
+      nopen=$(jqn "$sgjson" '[.SecurityGroups[]?.IpPermissions[]?.IpRanges[]? | select(.CidrIp=="0.0.0.0/0")] | length')
+      if [[ "$nopen" =~ ^[1-9] ]]; then open="🔴 CÓ"; ((N_CLB_OPEN++)) || true; else open="✅ không"; fi
+      sgdetail=$(printf '%s' "$sgjson" | jq -r '.SecurityGroups[]? | "     \(.GroupId) \(.GroupName)\n" + ([.IpPermissions[]? | "       \(.IpProtocol) \(.FromPort // "-")-\(.ToPort // "-") từ \([.IpRanges[]?.CidrIp] + [.UserIdGroupPairs[]?.GroupId] | join(","))"] | join("\n"))' 2>/dev/null)
+    fi
+
+    # Do k8s tạo cho Service nào?
+    svc=$(awsq elb describe-tags --load-balancer-names "$name" --output json \
+          | jq -r '.TagDescriptions[0].Tags[]? | select(.Key=="kubernetes.io/service-name") | .Value' 2>/dev/null)
+
+    # Listener TCP KHÔNG phát RequestCount → phải đo bằng nhiều metric
+    req=$(cw_sum AWS/ELB RequestCount              LoadBalancerName "$name" "$CW_DAYS")
+    byt=$(cw_sum AWS/ELB EstimatedProcessedBytes   LoadBalancerName "$name" "$CW_DAYS")
+    con=$(cw_sum AWS/ELB EstimatedALBNewConnectionCount LoadBalancerName "$name" "$CW_DAYS")
+    err=$(cw_sum AWS/ELB BackendConnectionErrors   LoadBalancerName "$name" "$CW_DAYS")
+
+    traffic="request=$(human "$req")  bytes=$(human "$byt")  conn=$(human "$con")"
+    if [[ "$req" == "0" && "$byt" == "0" && "$con" == "0" ]]; then
+      used="⚪ **không có traffic**"
+    else
+      used="🟢 đang có traffic"
+    fi
+
+    LB_OVERVIEW+="| \`$name\` | Classic | $scheme | $open | ${svc:-—} | $used |"$'\n'
+    LB_DETAIL+="── $name"$'\n'
+    LB_DETAIL+="   DNS          : $dns"$'\n'
+    LB_DETAIL+="   scheme       : $scheme   |  listener: $nlisten  |  instance: $ninst"$'\n'
+    LB_DETAIL+="   k8s service  : ${svc:-<không phải do k8s tạo>}"$'\n'
+    LB_DETAIL+="   traffic ${CW_DAYS}d  : $traffic  |  backend error=$(human "$err")"$'\n'
+    LB_DETAIL+="   mở Internet  : $open"$'\n'
+    LB_DETAIL+="${sgdetail}"$'\n\n'
+  done < <(printf '%s' "$ALL_CLB_JSON" | jq -r '.LoadBalancerDescriptions[]? |
+      "\(.LoadBalancerName)\t\(.DNSName)\t\(.Scheme)\t\(.SecurityGroups | join(" "))\t\([.ListenerDescriptions[]?.Listener | "\(.Protocol):\(.LoadBalancerPort)→\(.InstancePort)"] | join(","))\t\(.Instances | length)"' 2>/dev/null)
+fi
+
+# ═════════════════════════════════════════════════════════════
 say "3/10  Tìm ALB đứng trước + WAF…"
 ALB_LIST=""; ALB_SUMMARY=""; WAF_SUMMARY=""; WAF_ACLS=""
 if $HAS_AWS; then
@@ -219,6 +294,19 @@ if $HAS_AWS; then
     WAF_SUMMARY+="$nm → ${acl:-<KHÔNG có WAF>}"$'\n'
   done < <(printf '%s' "$ALB_LIST" | jq -r '.LoadBalancers[]? | select(.Type=="application") | .LoadBalancerArn' 2>/dev/null)
   WAF_ACLS=$(awsq wafv2 list-web-acls --scope REGIONAL --output json | jq -r '.WebACLs[]? | "\(.Name)  id=\(.Id)"' 2>/dev/null)
+
+  # ALB/NLB vào cùng bảng tổng quan, có traffic để đối chiếu với CLB
+  while IFS=$'\t' read -r arn nm typ sch; do
+    [[ -z "$arn" ]] && continue
+    dim="${arn#*:loadbalancer/}"
+    case "$typ" in
+      application) req=$(cw_sum AWS/ApplicationELB RequestCount     LoadBalancer "$dim" "$CW_DAYS") ;;
+      network)     req=$(cw_sum AWS/NetworkELB     ActiveFlowCount  LoadBalancer "$dim" "$CW_DAYS") ;;
+      *)           req=0 ;;
+    esac
+    acl=$(awsq wafv2 get-web-acl-for-resource --resource-arn "$arn" --output json | jq -r '.WebACL.Name // empty' 2>/dev/null)
+    LB_OVERVIEW+="| \`$nm\` | ${typ^} | $sch | *(SG riêng)* | WAF: ${acl:-KHÔNG} | 🟢 $(human "$req") request |"$'\n'
+  done < <(printf '%s' "$ALL_CLB_JSON" >/dev/null; printf '%s' "$ALB_LIST" | jq -r '.LoadBalancers[]? | "\(.LoadBalancerArn)\t\(.LoadBalancerName)\t\(.Type)\t\(.Scheme)"' 2>/dev/null)
 fi
 
 # ── ALB đăng ký instance nào, trên cổng nào ──
@@ -326,6 +414,11 @@ md "| CLB security group | \`${CLB_SGS:-?}\` |"
 md "| \`real_ip_recursive\` | $REALIP_RECURSIVE |"
 md "| externalTrafficPolicy | \`$ETP\` |"
 md "| **Domain đi qua đường nào?** | $DNS_VERDICT |"
+if [[ "$N_CLB_OPEN" -gt 0 ]]; then
+  md "| **Tổng số Classic ELB mở ra Internet** | 🔴 **$N_CLB_OPEN / $N_CLB_TOTAL** — xem mục 1.0 |"
+else
+  md "| Tổng số Classic ELB mở ra Internet | ✅ 0 / $N_CLB_TOTAL |"
+fi
 md ""
 md "> **Vì sao quan trọng:** chuỗi thiết kế là Client → ALB (WAF) → CLB → NodePort → nginx."
 md "> ALB *append* \`X-Forwarded-For\` nên client không spoof được qua đường đó."
@@ -369,6 +462,9 @@ fi
 [[ "$ANNOT_DISTINCT" -gt 1 ]] && md "- Dùng **$ANNOT_DISTINCT loại annotation nginx**. Bản 1.11+ siết validation — đối chiếu giá trị thực ở mục 2.3 và 2.4."
 [[ "$HAS_SM" -eq 0 ]] && md "- Không có ServiceMonitor → **bật metrics trước khi nâng** để có baseline error rate."
 [[ "$HAS_PDB" -eq 0 ]] && md "- Không có PodDisruptionBudget cho ingress controller."
+if [[ "$N_CLB_OPEN" -gt 0 ]]; then
+  md "- **$N_CLB_OPEN Classic ELB đang mở \`0.0.0.0/0\`** — mỗi cái là một đường vào bỏ qua WAF. Đối chiếu cột traffic ở mục 1.0 để biết cái nào là di sản có thể gỡ, cái nào còn dùng và phải siết theo SG."
+fi
 case "$TG_VERDICT" in
   *hostPort*) md "- **ALB đi thẳng vào hostPort** → kế hoạch rollout phải tính tới việc từng node mất cổng 80/443. Xem deregistration delay và health check ở mục 1.5." ;;
 esac
@@ -380,7 +476,23 @@ md ""
 say "6/10  Mục 1 — WAF / ALB / ELB…"
 md "## 1. Đường vào — WAF, ALB, ELB, Service"
 md ""
-md "### 1.1 Security group của Classic ELB — **quan trọng nhất**"
+md "### 1.0 Toàn cảnh Load Balancer — mọi cửa vào của account"
+md ""
+md "Mỗi Classic ELB \`internet-facing\` có security group mở \`0.0.0.0/0\` là một đường vào"
+md "**bỏ qua ALB và WAF**. Cột traffic cho biết cái nào còn được dùng thật, cái nào là di sản."
+md ""
+md "> ⚠️ Classic ELB dùng listener **TCP** không phát metric \`RequestCount\` — chỉ HTTP/HTTPS mới có."
+md "> Vì vậy cột traffic đo cả \`EstimatedProcessedBytes\` và \`EstimatedALBNewConnectionCount\`;"
+md "> chỉ khi **cả ba** đều bằng 0 mới kết luận là không có traffic."
+md ""
+md "| Load Balancer | Loại | Scheme | SG mở 0.0.0.0/0 | K8s Service / WAF | Traffic ${CW_DAYS} ngày |"
+md "|---|---|---|---|---|---|"
+if [[ -n "${LB_OVERVIEW//[[:space:]]/}" ]]; then printf '%s' "$LB_OVERVIEW" >> "$OUT"
+else md "| *(không đọc được — thiếu AWS CLI hoặc quyền)* | | | | | |"; fi
+md ""
+md "#### Chi tiết từng Classic ELB"
+block text "$LB_DETAIL"
+md "### 1.1 Security group của Classic ELB gắn với ingress — **quan trọng nhất**"
 block json "$(printf '%s' "$SG_RAW" | jq -r '[.SecurityGroups[]? | {GroupId, GroupName, Ingress:[.IpPermissions[]? | {Protocol:.IpProtocol, FromPort, ToPort, Cidrs:[.IpRanges[]?.CidrIp], FromSG:[.UserIdGroupPairs[]?.GroupId]}]}]' 2>/dev/null)"
 md "### 1.2 ALB trong region"
 md ""
