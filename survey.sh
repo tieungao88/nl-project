@@ -124,6 +124,37 @@ if $HAS_AWS; then
   WAF_ACLS=$(awsq wafv2 list-web-acls --scope REGIONAL --output json | jq -r '.WebACLs[]? | "\(.Name)  id=\(.Id)"' 2>/dev/null)
 fi
 
+# ── ALB đăng ký instance nào, trên cổng nào ──
+# TargetType=instance + Port 80/443 nghĩa là ALB đi THẲNG vào hostPort của node,
+# không qua Classic ELB. Điều đó đổi hẳn hồ sơ rủi ro khi rolling update.
+say "3b/10 Target group của ALB — đăng ký instance nào…"
+TG_JSON=""; TG_DETAIL=""; TG_VERDICT="chưa xác định"
+if $HAS_AWS; then
+  TG_JSON=$(awsq elbv2 describe-target-groups --output json)
+  while IFS=$'\t' read -r tgarn tgname tgtype tgport; do
+    [[ -z "$tgarn" ]] && continue
+    health=$(awsq elbv2 describe-target-health --target-group-arn "$tgarn" --output json)
+    dereg=$(awsq elbv2 describe-target-group-attributes --target-group-arn "$tgarn" --output json \
+            | jq -r '.Attributes[]? | select(.Key=="deregistration_delay.timeout_seconds") | .Value' 2>/dev/null)
+    hc=$(printf '%s' "$TG_JSON" | jq -r --arg a "$tgarn" '.TargetGroups[] | select(.TargetGroupArn==$a)
+         | "interval=\(.HealthCheckIntervalSeconds)s timeout=\(.HealthCheckTimeoutSeconds)s healthy=\(.HealthyThresholdCount) unhealthy=\(.UnhealthyThresholdCount) path=\(.HealthCheckPath // "-")"' 2>/dev/null)
+    cnt=$(printf '%s' "$health" | jq -r '[.TargetHealthDescriptions[]?] | length' 2>/dev/null)
+    healthy=$(printf '%s' "$health" | jq -r '[.TargetHealthDescriptions[]? | select(.TargetHealth.State=="healthy")] | length' 2>/dev/null)
+    TG_DETAIL+="── $tgname  (type=$tgtype, port=$tgport)"$'\n'
+    TG_DETAIL+="   health check      : $hc"$'\n'
+    TG_DETAIL+="   deregistration    : ${dereg:-mặc định 300}s"$'\n'
+    TG_DETAIL+="   target            : $healthy/$cnt healthy"$'\n'
+    TG_DETAIL+="$(printf '%s' "$health" | jq -r '.TargetHealthDescriptions[]? | "     \(.Target.Id):\(.Target.Port)  \(.TargetHealth.State)  \(.TargetHealth.Reason // "")"' 2>/dev/null)"$'\n\n'
+    # cổng 80/443 trên instance = đi thẳng hostPort
+    if [[ "$tgtype" == "instance" && ( "$tgport" == "80" || "$tgport" == "443" ) ]]; then
+      TG_VERDICT="🔴 **ALB đi THẲNG vào hostPort của node** (\`$tgname\` → instance:$tgport) — rolling update DaemonSet sẽ làm node mất cổng, ALB phải chờ health check mới ngừng gửi traffic"
+    elif [[ "$tgtype" == "instance" && "$tgport" =~ ^3[0-9]{4}$ && "$TG_VERDICT" == "chưa xác định" ]]; then
+      TG_VERDICT="✅ ALB trỏ NodePort (\`$tgname\` → instance:$tgport) — kube-proxy điều phối, rollout êm hơn"
+    fi
+  done < <(printf '%s' "$TG_JSON" | jq -r '.TargetGroups[]? | select((.LoadBalancerArns | length) > 0)
+           | "\(.TargetGroupArn)\t\(.TargetGroupName)\t\(.TargetType)\t\(.Port)"' 2>/dev/null)
+fi
+
 # ═════════════════════════════════════════════════════════════
 say "4/10  Đọc nginx.conf đã render…"
 NGINX_REALIP=""; REALIP_RECURSIVE="?"
@@ -178,6 +209,7 @@ md "### B. Đường traffic"
 md ""
 md "| Câu hỏi | Kết quả |"
 md "|---|---|"
+md "| **ALB trỏ vào đâu?** | $TG_VERDICT |"
 md "| Loại Load Balancer | $LB_KIND |"
 md "| Listener → instance port | \`${LB_INSTANCE_PORTS:-?}\` |"
 md "| Service type | \`$SVC_TYPE\` |"
@@ -209,6 +241,9 @@ fi
 [[ "$ANNOT_DISTINCT" -gt 1 ]] && md "- Dùng **$ANNOT_DISTINCT loại annotation nginx**. Bản 1.11+ siết validation — đối chiếu giá trị thực ở mục 2.3 và 2.4."
 [[ "$HAS_SM" -eq 0 ]] && md "- Không có ServiceMonitor → **bật metrics trước khi nâng** để có baseline error rate."
 [[ "$HAS_PDB" -eq 0 ]] && md "- Không có PodDisruptionBudget cho ingress controller."
+case "$TG_VERDICT" in
+  *hostPort*) md "- **ALB đi thẳng vào hostPort** → kế hoạch rollout phải tính tới việc từng node mất cổng 80/443. Xem deregistration delay và health check ở mục 1.5." ;;
+esac
 md ""
 md "---"
 md ""
@@ -239,8 +274,17 @@ md ""
 block text "$WAF_SUMMARY"
 md "### 1.4 Web ACL đang có trong region"
 block text "$WAF_ACLS"
-md "### 1.5 Target group của ALB — xem ALB trỏ vào đâu"
-block json "$(awsq elbv2 describe-target-groups --output json | jq -r '[.TargetGroups[]? | {Name:.TargetGroupName, TargetType, Port, Protocol, VpcId, LBs:.LoadBalancerArns}]' 2>/dev/null)"
+md "### 1.5 Target group của ALB — instance nào, cổng nào, health ra sao"
+md ""
+md "\`TargetType: instance\` + cổng **80/443** nghĩa là ALB đi thẳng vào \`hostPort\` của node,"
+md "không qua Classic ELB. Khi đó rolling update DaemonSet làm node mất cổng, và ALB chỉ"
+md "ngừng gửi traffic sau khi health check đủ số lần thất bại — đó là cửa sổ rớt request."
+md ""
+md "$TG_VERDICT"
+md ""
+block text "$TG_DETAIL"
+md "#### Định nghĩa target group"
+block json "$(printf '%s' "$TG_JSON" | jq -r '[.TargetGroups[]? | {Name:.TargetGroupName, TargetType, Port, Protocol, VpcId, HealthCheck:{Interval:.HealthCheckIntervalSeconds, Timeout:.HealthCheckTimeoutSeconds, Healthy:.HealthyThresholdCount, Unhealthy:.UnhealthyThresholdCount, Path:.HealthCheckPath}, AttachedTo:.LoadBalancerArns}]' 2>/dev/null)"
 md "### 1.6 DNS thực tế của các domain"
 md ""
 md "Cho biết client vào qua ALB, qua CDN, hay thẳng vào CLB."
